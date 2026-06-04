@@ -22,7 +22,8 @@ dependencies {
     implementation(ktorLibs.server.netty)
     implementation(ktorLibs.server.resources)
     implementation(libs.logback.classic)
-
+    implementation("io.ktor:ktor-server-content-negotiation-jvm")
+    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm")
     testImplementation(kotlin("test"))
     testImplementation(ktorLibs.server.testHost)
 }
