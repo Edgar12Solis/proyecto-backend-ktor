@@ -8,7 +8,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
-
+import com.example.solicitudes.UsuarioResponse
 fun Application.usuarioRoutes() {
 
     routing {
@@ -27,28 +27,15 @@ fun Application.usuarioRoutes() {
 
             call.respond(mapOf("mensaje" to "Usuario insertado"))
         }
-        get("/debug") {
-            val data = transaction {
-                UsuariosTable.selectAll().map {
-                    mapOf(
-                        "id" to it[UsuariosTable.id],
-                        "nombre" to it[UsuariosTable.nombre],
-                        "rol" to it[UsuariosTable.rol]
-                    )
-                }
-            }
 
-            call.respond(data)
-        }
-        // 🔥 LISTAR USUARIOS
         get("/usuarios") {
 
             val lista = transaction {
                 UsuariosTable.selectAll().map {
-                    mapOf(
-                        "id" to it[UsuariosTable.id],
-                        "nombre" to it[UsuariosTable.nombre],
-                        "rol" to it[UsuariosTable.rol]
+                    UsuarioResponse(
+                        id = it[UsuariosTable.id],
+                        nombre = it[UsuariosTable.nombre],
+                        rol = it[UsuariosTable.rol]
                     )
                 }
             }
