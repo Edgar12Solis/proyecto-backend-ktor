@@ -5,4 +5,4 @@ ktor:
     modules:
       - com.example.SerializationKt.configureSerialization
       - com.example.ResourcesKt.configureResources
-      - com.example.RoutingKt.configureRouting
+      - com.example.routes.RoutingKt.configureRouting

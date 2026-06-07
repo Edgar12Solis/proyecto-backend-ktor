@@ -1,5 +1,7 @@
 package com.example
 
+import com.example.database.DatabaseFactory
+import com.example.routes.configureRouting
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 // Como todos están en 'com.example', no necesitas más imports de paquetes
