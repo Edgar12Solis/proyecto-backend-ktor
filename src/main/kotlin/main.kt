@@ -4,6 +4,7 @@ import com.example.database.DatabaseFactory
 import com.example.routes.configureRouting
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import com.example.routes.usuarioRoutes
 // Como todos están en 'com.example', no necesitas más imports de paquetes
 
 fun main(args: Array<String>) {
@@ -14,5 +15,6 @@ fun main(args: Array<String>) {
         // Llamamos a las funciones directamente
         configureSerialization()
         configureRouting()
+        usuarioRoutes()
     }.start(wait = true)
 }
