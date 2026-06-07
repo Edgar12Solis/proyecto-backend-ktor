@@ -4,7 +4,7 @@ import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
-
+import org.jetbrains.exposed.sql.transactions.transaction
 @Serializable
 data class UsuarioPrueba(val id: Int, val nombre: String, val rol: String)
 
@@ -20,6 +20,17 @@ fun Application.configureRouting() {
                 UsuarioPrueba(2, "Maria", "Desarrolladora")
             )
             call.respond(listaUsuarios)
+
+        }
+        get("/test-db") {
+            try {
+                transaction {
+                    // Si entra aquí, la conexión existe
+                }
+                call.respondText("✅ Conexión a PostgreSQL Railway OK")
+            } catch (e: Exception) {
+                call.respondText("❌ Error: ${e.message}")
+            }
         }
     }
 }
