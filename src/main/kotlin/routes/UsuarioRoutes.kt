@@ -27,7 +27,19 @@ fun Application.usuarioRoutes() {
 
             call.respond(mapOf("mensaje" to "Usuario insertado"))
         }
+        get("/debug") {
+            val data = transaction {
+                UsuariosTable.selectAll().map {
+                    mapOf(
+                        "id" to it[UsuariosTable.id],
+                        "nombre" to it[UsuariosTable.nombre],
+                        "rol" to it[UsuariosTable.rol]
+                    )
+                }
+            }
 
+            call.respond(data)
+        }
         // 🔥 LISTAR USUARIOS
         get("/usuarios") {
 
