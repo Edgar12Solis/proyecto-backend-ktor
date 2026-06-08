@@ -9,6 +9,8 @@ import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import com.example.solicitudes.UsuarioResponse
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.deleteWhere
 fun Application.usuarioRoutes() {
 
     routing {
@@ -51,9 +53,11 @@ fun Application.usuarioRoutes() {
                 return@delete
             }
 
-            // 🔥 aquí borras en base de datos
-            // ejemplo:
-            // usuarioDao.delete(id)
+            transaction {
+                UsuariosTable.deleteWhere {
+                    UsuariosTable.id eq id
+                }
+            }
 
             call.respondText("Usuario eliminado")
         }
