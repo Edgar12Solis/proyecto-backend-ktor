@@ -15,7 +15,7 @@ fun Application.usuarioRoutes() {
 
     routing {
 
-        // 🔥 INSERTAR USUARIO
+        // 🔥 INSERTUSUARIO
         post("/usuarios") {
 
             val usuario = call.receive<UsuarioRequest>()
