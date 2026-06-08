@@ -44,7 +44,7 @@ fun Application.usuarioRoutes() {
 
             call.respond(lista)
         }
-        delete("/{id}") {
+        delete("/usuarios/{id}") {
 
             val id = call.parameters["id"]?.toIntOrNull()
 
