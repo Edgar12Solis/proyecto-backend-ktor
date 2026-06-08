@@ -42,5 +42,20 @@ fun Application.usuarioRoutes() {
 
             call.respond(lista)
         }
+        delete("/{id}") {
+
+            val id = call.parameters["id"]?.toIntOrNull()
+
+            if (id == null) {
+                call.respondText("ID inválido")
+                return@delete
+            }
+
+            // 🔥 aquí borras en base de datos
+            // ejemplo:
+            // usuarioDao.delete(id)
+
+            call.respondText("Usuario eliminado")
+        }
     }
 }
