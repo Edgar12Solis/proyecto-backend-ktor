@@ -1,16 +1,19 @@
-package com.example
+package com.example// Revisa que este sea tu paquete correcto
 
-import io.ktor.http.* // <-- Agregado para HttpStatusCode
 import io.ktor.server.application.*
-import io.ktor.server.request.* // <-- Agregado para call.receive
+import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
+import io.ktor.http.HttpStatusCode
+
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.transactions.transaction
+import com.example.database.ClientesTable
 
 @Serializable
 data class UsuarioPrueba(val id: Int, val nombre: String, val rol: String)
 
-// --- AQUÍ EMPIEZA LO MIO ---
 @Serializable
 data class Cliente(
     val id: Int? = null,
@@ -20,7 +23,6 @@ data class Cliente(
     val telefono: String,
     val correo: String
 )
-// --- AQUÍ TERMINA LO MIO ---
 
 fun Application.configureRouting() {
     routing {
@@ -36,23 +38,30 @@ fun Application.configureRouting() {
             call.respond(listaUsuarios)
         }
 
-        // --- AQUÍ EMPIEZA MI RUTA ---
+        // --- RUTA PARA GUARDAR CLIENTES ---
         post("/clientes") {
             try {
-                // Recibimos los datos del celular y los convertimos al modelo Cliente
+                // 1. Recibimos los datos del celular
                 val nuevoCliente = call.receive<Cliente>()
 
-                // Lo imprimimos en la consola del servidor
-                println("¡Éxito! El servidor recibió a: ${nuevoCliente.nombre} ${nuevoCliente.apellido}")
+                // 2. Abrimos conexión a Postgres y hacemos el INSERT
+                transaction {
+                    ClientesTable.insert {
+                        it[ClientesTable.nombre] = nuevoCliente.nombre
+                        it[ClientesTable.apellido] = nuevoCliente.apellido
+                        it[ClientesTable.fechaCumpleanos] = nuevoCliente.fecha_cumpleanos
+                        it[ClientesTable.telefono] = nuevoCliente.telefono
+                        it[ClientesTable.correo] = nuevoCliente.correo
+                    }
+                }
 
-                // Confirmamos al celular que todo salió bien (Status 201 Created)
-                call.respond(HttpStatusCode.Created, "Cliente registrado correctamente")
+                // 3. Confirmamos en consola y al celular
+                println("¡Éxito! Cliente guardado en la BD: ${nuevoCliente.nombre}")
+                call.respond(HttpStatusCode.Created, "Cliente registrado exitosamente")
 
             } catch (e: Exception) {
-                // Si falta algún dato o hay un error, avisamos al celular (Status 400 Bad Request)
                 call.respond(HttpStatusCode.BadRequest, "Error al registrar: ${e.message}")
             }
         }
-        // --- AQUÍ TERMINA MI RUTA ---
     }
 }
