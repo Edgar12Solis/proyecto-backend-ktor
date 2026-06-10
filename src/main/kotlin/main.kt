@@ -1,15 +1,20 @@
 package com.example
 
+import com.example.database.DatabaseFactory
+import com.example.routes.configureRouting
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import com.example.routes.usuarioRoutes
 // Como todos están en 'com.example', no necesitas más imports de paquetes
 
 fun main(args: Array<String>) {
     val port = System.getenv("PORT")?.toInt() ?: 8080
 
     embeddedServer(Netty, port = port) {
+        DatabaseFactory.init()
         // Llamamos a las funciones directamente
         configureSerialization()
         configureRouting()
+        usuarioRoutes()
     }.start(wait = true)
 }
