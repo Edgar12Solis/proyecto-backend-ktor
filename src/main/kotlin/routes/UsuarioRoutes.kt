@@ -15,7 +15,7 @@ fun Application.usuarioRoutes() {
 
     routing {
 
-        // 🔥 INSERTUSUARIO
+
         post("/usuarios") {
 
             val usuario = call.receive<UsuarioRequest>()
@@ -23,6 +23,8 @@ fun Application.usuarioRoutes() {
             transaction {
                 UsuariosTable.insert {
                     it[nombre] = usuario.nombre
+                    it[email] = usuario.email
+                    it[password] = usuario.password
                     it[rol] = usuario.rol
                 }
             }
@@ -37,6 +39,7 @@ fun Application.usuarioRoutes() {
                     UsuarioResponse(
                         id = it[UsuariosTable.id],
                         nombre = it[UsuariosTable.nombre],
+                        email = it[UsuariosTable.email],
                         rol = it[UsuariosTable.rol]
                     )
                 }

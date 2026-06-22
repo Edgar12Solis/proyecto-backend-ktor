@@ -1,6 +1,7 @@
 package com.example.database
 
 import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
 
 object DatabaseFactory {
@@ -19,7 +20,8 @@ object DatabaseFactory {
         )
 
         transaction {
-            println("✅ Conectado a PostgreSQL Railway")
+            SchemaUtils.create(UsuariosTable, ClientesTable)
+            println("✅ Conectado a PostgreSQL Railway y Tablas Sincronizadas")
         }
     }
 }
