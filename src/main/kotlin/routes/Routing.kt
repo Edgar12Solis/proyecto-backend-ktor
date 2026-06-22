@@ -7,8 +7,13 @@ import io.ktor.server.routing.*
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import com.example.database.ClientesTable
+import com.example.database.UsuariosTable
+import com.example.solicitudes.LoginRequest
+import com.example.solicitudes.LoginResponse
 
 @Serializable
 data class UsuarioPrueba(val id: Int, val nombre: String, val rol: String)
@@ -26,24 +31,60 @@ data class Cliente(
 fun Application.configureRouting() {
     routing {
 
-        // 🟢 PRUEBA DEL SERVIDOR
+        // PRUEBA DEL SERVIDOR
         get("/") {
             call.respondText("¡Servidor Ktor activo 🚀!")
         }
 
-        // 🧪 PRUEBA DE CONEXIÓN A BD
+        post("/login") {
+            try {
+                val loginReq = call.receive<LoginRequest>()
+                val user = transaction {
+                    UsuariosTable.selectAll().where {
+                        (UsuariosTable.email eq loginReq.email) and (UsuariosTable.password eq loginReq.password)
+                    }.singleOrNull()
+                }
+
+                if (user != null) {
+                    call.respond(
+                        LoginResponse(
+                            success = true,
+                            message = "Login exitoso",
+                            rol = user[UsuariosTable.rol]
+                        )
+                    )
+                } else {
+                    call.respond(
+                        HttpStatusCode.Unauthorized,
+                        LoginResponse(
+                            success = false,
+                            message = "Email o contraseña incorrectos"
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    LoginResponse(
+                        success = false,
+                        message = "Error en la solicitud: ${e.message}"
+                    )
+                )
+            }
+        }
+
         get("/test-db") {
             try {
                 transaction {
                     // Solo prueba conexión a Railway
                 }
-                call.respondText("✅ Conexión a PostgreSQL Railway OK")
+                call.respondText("Conexión a PostgreSQL Railway OK")
             } catch (e: Exception) {
-                call.respondText("❌ Error: ${e.message}")
+                call.respondText("Error: ${e.message}")
             }
         }
 
-        // 👥 RUTA DE USUARIOS
+
         get("/usuarios") {
             val listaUsuarios = listOf(
                 UsuarioPrueba(1, "Juan", "Administrador"),
@@ -52,7 +93,7 @@ fun Application.configureRouting() {
             call.respond(listaUsuarios)
         }
 
-        // 📥 TU RUTA REAL PARA GUARDAR CLIENTES
+
         post("/clientes") {
             try {
                 val nuevoCliente = call.receive<Cliente>()
