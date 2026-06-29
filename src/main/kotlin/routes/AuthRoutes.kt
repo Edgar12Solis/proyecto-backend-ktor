@@ -2,14 +2,13 @@ package com.example.routes
 
 import com.example.data.PerfilesClientesTable
 import com.example.data.UsuariosTable
-import com.example.models.LoginRequest
-import com.example.models.LoginResponse
-import com.example.models.RegisterRequest
+import com.example.models.*
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -17,28 +16,35 @@ import org.jetbrains.exposed.sql.transactions.transaction
 fun Route.authRoutes() {
 
     post("/login") {
-        val loginReq = call.receive<LoginRequest>()
-        val user = transaction {
-            UsuariosTable.selectAll().where {
-                (UsuariosTable.email eq loginReq.email) and (UsuariosTable.password eq loginReq.password)
-            }.singleOrNull()
-        }
+        try {
+            val loginReq = call.receive<LoginRequest>()
+            val user = transaction {
+                UsuariosTable.selectAll().where {
+                    (UsuariosTable.email eq loginReq.email) and (UsuariosTable.password eq loginReq.password)
+                }.singleOrNull()
+            }
 
-        if (user != null) {
-            call.respond(
-                LoginResponse(
-                    success = true,
-                    message = "Login exitoso",
-                    rol = user[UsuariosTable.rol]
+            if (user != null) {
+                call.respond(
+                    LoginResponse(
+                        success = true,
+                        message = "Login exitoso",
+                        rol = user[UsuariosTable.rol]
+                    )
                 )
-            )
-        } else {
-            call.respond(
-                HttpStatusCode.Unauthorized,
-                LoginResponse(
-                    success = false,
-                    message = "Email o contraseña incorrectos"
+            } else {
+                call.respond(
+                    HttpStatusCode.Unauthorized,
+                    LoginResponse(
+                        success = false,
+                        message = "Email o contraseña incorrectos"
+                    )
                 )
+            }
+        } catch (e: Exception) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                LoginResponse(success = false, message = "Error en login: ${e.message}")
             )
         }
     }
@@ -67,12 +73,23 @@ fun Route.authRoutes() {
 
             call.respond(
                 HttpStatusCode.Created,
-                mapOf("success" to true, "message" to "Cuenta creada con éxito")
+                RegisterResponse(success = true, message = "Cuenta creada con éxito")
+            )
+        } catch (e: ExposedSQLException) {
+            // Manejar errores de base de datos como emails duplicados
+            val message = if (e.message?.contains("duplicate key") == true) {
+                "El correo electrónico ya está registrado"
+            } else {
+                "Error de base de datos: ${e.message}"
+            }
+            call.respond(
+                HttpStatusCode.Conflict,
+                RegisterResponse(success = false, message = message)
             )
         } catch (e: Exception) {
             call.respond(
                 HttpStatusCode.BadRequest,
-                mapOf("success" to false, "message" to "Error al registrar: ${e.message}")
+                RegisterResponse(success = false, message = "Error al registrar: ${e.message}")
             )
         }
     }
