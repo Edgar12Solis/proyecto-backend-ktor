@@ -15,6 +15,8 @@ The project is now organized into logical packages for better maintainability:
 - Receives: `nombres`, `apellidos`, `email`, `telefono`, and `password`.
 - **Automatic Role**: Assigns `'CLIENTE'` automatically.
 - **Relational Data**: Creates a new user in `usuarios` and links their personal info in the new `perfiles_clientes` table using the user's unique ID.
+- **Fixed Response**: Now returns a dedicated `RegisterResponse` class (JSON object) instead of a map, resolving the "NoTransformationFoundException" in the mobile app.
+- **Improved Errors**: Added detection for duplicate emails (returns `409 Conflict` with a clear message) and general validation errors, preventing generic `500 Internal Server Error`.
 
 ### 2. Admin Feature: Barber Creation (`POST /admin/barberos`)
 - Special endpoint for administrators to register barbers.

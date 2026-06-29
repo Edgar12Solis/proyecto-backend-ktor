@@ -23,3 +23,9 @@ data class RegisterRequest(
     val telefono: String,
     val password: String
 )
+
+@Serializable
+data class RegisterResponse(
+    val success: Boolean,
+    val message: String
+)
