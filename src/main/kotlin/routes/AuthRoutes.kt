@@ -28,7 +28,7 @@ fun Route.authRoutes() {
                 call.respond(
                     LoginResponse(
                         success = true,
-                        message = "Login exitoso",
+                        message = "¡Bienvenido de nuevo!",
                         rol = user[UsuariosTable.rol]
                     )
                 )
@@ -37,7 +37,7 @@ fun Route.authRoutes() {
                     HttpStatusCode.Unauthorized,
                     LoginResponse(
                         success = false,
-                        message = "Email o contraseña incorrectos"
+                        message = "Correo o contraseña incorrectos. Por favor, intenta de nuevo."
                     )
                 )
             }
@@ -45,8 +45,11 @@ fun Route.authRoutes() {
             println("❌ Error en login: ${e.message}")
             e.printStackTrace()
             call.respond(
-                HttpStatusCode.BadRequest,
-                LoginResponse(success = false, message = "Error en login: ${e.message}")
+                HttpStatusCode.InternalServerError,
+                LoginResponse(
+                    success = false, 
+                    message = "Hubo un problema de conexión con el servidor. Inténtalo más tarde."
+                )
             )
         }
     }
@@ -75,7 +78,7 @@ fun Route.authRoutes() {
 
             call.respond(
                 HttpStatusCode.Created,
-                RegisterResponse(success = true, message = "Cuenta creada con éxito")
+                RegisterResponse(success = true, message = "¡Cuenta creada con éxito! Ya puedes iniciar sesión.")
             )
         } catch (e: ExposedSQLException) {
             // Log the error for debugging in Railway
@@ -85,9 +88,9 @@ fun Route.authRoutes() {
             // Manejar errores de base de datos como emails duplicados (SQL State 23505)
             val isDuplicate = e.message?.contains("duplicate", ignoreCase = true) == true || e.sqlState == "23505"
             val message = if (isDuplicate) {
-                "El correo electrónico ya está registrado"
+                "Este correo electrónico ya está registrado."
             } else {
-                "Error de base de datos: ${e.message}"
+                "No pudimos crear tu cuenta en este momento. Inténtalo de nuevo."
             }
             
             call.respond(
@@ -99,8 +102,11 @@ fun Route.authRoutes() {
             e.printStackTrace()
 
             call.respond(
-                HttpStatusCode.BadRequest,
-                RegisterResponse(success = false, message = "Error al registrar: ${e.message}")
+                HttpStatusCode.InternalServerError,
+                RegisterResponse(
+                    success = false, 
+                    message = "Ocurrió un error inesperado. Por favor, inténtalo más tarde."
+                )
             )
         }
     }
