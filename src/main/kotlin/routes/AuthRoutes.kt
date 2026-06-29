@@ -42,6 +42,8 @@ fun Route.authRoutes() {
                 )
             }
         } catch (e: Exception) {
+            println("❌ Error en login: ${e.message}")
+            e.printStackTrace()
             call.respond(
                 HttpStatusCode.BadRequest,
                 LoginResponse(success = false, message = "Error en login: ${e.message}")
@@ -76,17 +78,26 @@ fun Route.authRoutes() {
                 RegisterResponse(success = true, message = "Cuenta creada con éxito")
             )
         } catch (e: ExposedSQLException) {
-            // Manejar errores de base de datos como emails duplicados
-            val message = if (e.message?.contains("duplicate key") == true) {
+            // Log the error for debugging in Railway
+            println("❌ Error de base de datos en registro: ${e.message}")
+            println("SQL State: ${e.sqlState}")
+
+            // Manejar errores de base de datos como emails duplicados (SQL State 23505)
+            val isDuplicate = e.message?.contains("duplicate", ignoreCase = true) == true || e.sqlState == "23505"
+            val message = if (isDuplicate) {
                 "El correo electrónico ya está registrado"
             } else {
                 "Error de base de datos: ${e.message}"
             }
+            
             call.respond(
                 HttpStatusCode.Conflict,
                 RegisterResponse(success = false, message = message)
             )
         } catch (e: Exception) {
+            println("❌ Error inesperado en registro: ${e.message}")
+            e.printStackTrace()
+
             call.respond(
                 HttpStatusCode.BadRequest,
                 RegisterResponse(success = false, message = "Error al registrar: ${e.message}")
