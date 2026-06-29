@@ -26,6 +26,7 @@ fun Route.authRoutes() {
 
             if (user != null) {
                 call.respond(
+                    HttpStatusCode.OK,
                     LoginResponse(
                         success = true,
                         message = "¡Bienvenido de nuevo!",
@@ -34,7 +35,7 @@ fun Route.authRoutes() {
                 )
             } else {
                 call.respond(
-                    HttpStatusCode.Unauthorized,
+                    HttpStatusCode.OK,
                     LoginResponse(
                         success = false,
                         message = "Correo o contraseña incorrectos. Por favor, intenta de nuevo."
@@ -45,7 +46,7 @@ fun Route.authRoutes() {
             println("❌ Error en login: ${e.message}")
             e.printStackTrace()
             call.respond(
-                HttpStatusCode.InternalServerError,
+                HttpStatusCode.OK,
                 LoginResponse(
                     success = false, 
                     message = "Hubo un problema de conexión con el servidor. Inténtalo más tarde."
@@ -94,7 +95,7 @@ fun Route.authRoutes() {
             }
             
             call.respond(
-                HttpStatusCode.Conflict,
+                HttpStatusCode.OK,
                 RegisterResponse(success = false, message = message)
             )
         } catch (e: Exception) {
@@ -102,7 +103,7 @@ fun Route.authRoutes() {
             e.printStackTrace()
 
             call.respond(
-                HttpStatusCode.InternalServerError,
+                HttpStatusCode.OK,
                 RegisterResponse(
                     success = false, 
                     message = "Ocurrió un error inesperado. Por favor, inténtalo más tarde."
