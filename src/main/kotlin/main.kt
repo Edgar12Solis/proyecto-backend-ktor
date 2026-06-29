@@ -1,16 +1,16 @@
 package com.example
 
-import com.example.database.DatabaseFactory
-import com.example.routes.configureRouting
+import com.example.data.DatabaseFactory
+import com.example.routes.*
+import com.example.plugins.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.http.*
-import com.example.routes.usuarioRoutes
-// Como todos están en 'com.example', no necesitas más imports de paquetes
+import io.ktor.server.routing.*
 
-fun main(args: Array<String>) {
+fun main() {
     val port = System.getenv("PORT")?.toInt() ?: 8080
 
     embeddedServer(Netty, port = port) {
@@ -25,9 +25,13 @@ fun main(args: Array<String>) {
             allowHeader(HttpHeaders.Authorization)
         }
 
-        // Llamamos a las funciones directamente
         configureSerialization()
-        configureRouting()
-        usuarioRoutes()
+        
+        routing {
+            generalRoutes()
+            authRoutes()
+            adminRoutes()
+            usuarioRoutes()
+        }
     }.start(wait = true)
 }
