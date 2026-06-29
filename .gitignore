@@ -1,0 +1,11 @@
+.gradle
+build
+.idea
+*.class
+*.jar
+*.war
+*.ear
+*.log
+local.properties
+.artifacts
+.kotlin
