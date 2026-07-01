@@ -26,12 +26,14 @@ fun main() {
         }
 
         configureSerialization()
+        configureSecurity()
         
         routing {
             generalRoutes()
             authRoutes()
             adminRoutes()
             usuarioRoutes()
+            customerRoutes()
         }
     }.start(wait = true)
 }

@@ -3,6 +3,8 @@ package com.example.routes
 import com.example.data.PerfilesClientesTable
 import com.example.data.UsuariosTable
 import com.example.models.*
+import com.example.plugins.JwtConfig
+import com.example.plugins.PasswordHasher
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -20,17 +22,19 @@ fun Route.authRoutes() {
             val loginReq = call.receive<LoginRequest>()
             val user = transaction {
                 UsuariosTable.selectAll().where {
-                    (UsuariosTable.email eq loginReq.email) and (UsuariosTable.password eq loginReq.password)
+                    UsuariosTable.email eq loginReq.email
                 }.singleOrNull()
             }
 
-            if (user != null) {
+            if (user != null && PasswordHasher.check(loginReq.password, user[UsuariosTable.password])) {
+                val token = JwtConfig.generateToken(loginReq.email)
                 call.respond(
                     HttpStatusCode.OK,
                     LoginResponse(
                         success = true,
                         message = "¡Bienvenido de nuevo!",
-                        rol = user[UsuariosTable.rol]
+                        rol = user[UsuariosTable.rol],
+                        token = token
                     )
                 )
             } else {
@@ -60,11 +64,11 @@ fun Route.authRoutes() {
             val regReq = call.receive<RegisterRequest>()
 
             transaction {
-                // 1. Crear el usuario con rol CLIENTE
+                // 1. Crear el usuario con rol CLIENTE y password hasheada
                 val userId = UsuariosTable.insertAndGetId {
                     it[UsuariosTable.nombre] = "${regReq.nombres} ${regReq.apellidos}"
                     it[UsuariosTable.email] = regReq.email
-                    it[UsuariosTable.password] = regReq.password
+                    it[UsuariosTable.password] = PasswordHasher.hash(regReq.password)
                     it[UsuariosTable.rol] = "CLIENTE"
                 }
 

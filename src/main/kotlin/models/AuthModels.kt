@@ -12,7 +12,8 @@ data class LoginRequest(
 data class LoginResponse(
     val success: Boolean,
     val message: String,
-    val rol: String? = null
+    val rol: String? = null,
+    val token: String? = null
 )
 
 @Serializable

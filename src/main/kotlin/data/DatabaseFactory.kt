@@ -23,9 +23,10 @@ object DatabaseFactory {
                 UsuariosTable, 
                 ClientesTable,
                 PerfilesClientesTable, 
-                PerfilesBarberosTable
+                PerfilesBarberosTable,
+                CitasTable
             )
-            println("✅ Database Synced: Usuarios, Clientes, PerfilesClientes, PerfilesBarberos")
+            println("✅ Database Synced: Usuarios, Clientes, PerfilesClientes, PerfilesBarberos, Citas")
         }
     }
 }

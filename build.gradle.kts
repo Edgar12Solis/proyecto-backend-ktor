@@ -23,7 +23,9 @@ dependencies {
     implementation(ktorLibs.server.netty)
     implementation(ktorLibs.server.resources)
     implementation(ktorLibs.server.cors)
+    implementation(ktorLibs.server.auth.jwt)
 
+    implementation("at.favre.lib:bcrypt:0.10.2")
     implementation("io.ktor:ktor-server-content-negotiation-jvm")
     implementation("io.ktor:ktor-serialization-kotlinx-json-jvm")
     implementation("org.postgresql:postgresql:42.7.3")
