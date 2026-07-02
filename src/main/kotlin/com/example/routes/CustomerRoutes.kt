@@ -11,7 +11,6 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 
 fun Route.customerRoutes() {
@@ -19,7 +18,7 @@ fun Route.customerRoutes() {
         
         get("/customer/dashboard-data") {
             val principal = call.principal<JWTPrincipal>()
-            val email = principal!!.payload.getClaim("email").asString()
+            val email = principal?.payload?.getClaim("email")?.asString() ?: ""
             
             try {
                 val data = transaction {
@@ -51,7 +50,7 @@ fun Route.customerRoutes() {
         
         get("/customer/profile") {
             val principal = call.principal<JWTPrincipal>()
-            val email = principal!!.payload.getClaim("email").asString()
+            val email = principal?.payload?.getClaim("email")?.asString() ?: ""
             
             try {
                 val profile = transaction {
@@ -76,7 +75,7 @@ fun Route.customerRoutes() {
         
         post("/customer/update-profile") {
             val principal = call.principal<JWTPrincipal>()
-            val email = principal!!.payload.getClaim("email").asString()
+            val email = principal?.payload?.getClaim("email")?.asString() ?: ""
             val req = call.receive<UpdateProfileRequest>()
             
             try {
@@ -84,21 +83,21 @@ fun Route.customerRoutes() {
                     val user = UsuariosTable.selectAll().where { UsuariosTable.email eq email }.single()
                     val userId = user[UsuariosTable.id]
                     
-                    // Actualizar Usuario (nombre y password si viene)
+                    // Actualizar Usuario
                     UsuariosTable.update({ UsuariosTable.id eq userId }) {
-                        it[nombre] = "${req.nombres} ${req.apellidos}"
+                        it[UsuariosTable.nombre] = "\${req.nombres} \${req.apellidos}"
                         if (!req.password.isNullOrBlank()) {
-                            it[password] = PasswordHasher.hash(req.password)
+                            it[UsuariosTable.password] = PasswordHasher.hash(req.password)
                         }
                     }
                     
                     // Actualizar Perfil
                     PerfilesClientesTable.update({ PerfilesClientesTable.usuarioId eq userId }) {
-                        it[nombres] = req.nombres
-                        it[apellidos] = req.apellidos
-                        it[telefono] = req.telefono
-                        it[fechaNacimiento] = req.fechaNacimiento
-                        it[direccion] = req.direccion
+                        it[PerfilesClientesTable.nombres] = req.nombres
+                        it[PerfilesClientesTable.apellidos] = req.apellidos
+                        it[PerfilesClientesTable.telefono] = req.telefono
+                        it[PerfilesClientesTable.fechaNacimiento] = req.fechaNacimiento
+                        it[PerfilesClientesTable.direccion] = req.direccion
                     }
                 }
                 call.respond(mapOf("success" to true, "message" to "Perfil actualizado con éxito"))

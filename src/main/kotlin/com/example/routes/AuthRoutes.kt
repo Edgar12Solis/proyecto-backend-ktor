@@ -12,7 +12,6 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 
 fun Route.authRoutes() {
@@ -47,8 +46,7 @@ fun Route.authRoutes() {
                 )
             }
         } catch (e: Exception) {
-            println("❌ Error en login: ${e.message}")
-            e.printStackTrace()
+            println("❌ Error en login: \${e.message}")
             call.respond(
                 HttpStatusCode.OK,
                 LoginResponse(
@@ -66,7 +64,7 @@ fun Route.authRoutes() {
             transaction {
                 // 1. Crear el usuario con rol CLIENTE y password hasheada
                 val userId = UsuariosTable.insertAndGetId {
-                    it[UsuariosTable.nombre] = "${regReq.nombres} ${regReq.apellidos}"
+                    it[UsuariosTable.nombre] = "\${regReq.nombres} \${regReq.apellidos}"
                     it[UsuariosTable.email] = regReq.email
                     it[UsuariosTable.password] = PasswordHasher.hash(regReq.password)
                     it[UsuariosTable.rol] = "CLIENTE"
@@ -86,32 +84,18 @@ fun Route.authRoutes() {
                 RegisterResponse(success = true, message = "¡Cuenta creada con éxito! Ya puedes iniciar sesión.")
             )
         } catch (e: ExposedSQLException) {
-            // Log the error for debugging in Railway
-            println("❌ Error de base de datos en registro: ${e.message}")
-            println("SQL State: ${e.sqlState}")
-
-            // Manejar errores de base de datos como emails duplicados (SQL State 23505)
             val isDuplicate = e.message?.contains("duplicate", ignoreCase = true) == true || e.sqlState == "23505"
-            val message = if (isDuplicate) {
-                "Este correo electrónico ya está registrado."
-            } else {
-                "No pudimos crear tu cuenta en este momento. Inténtalo de nuevo."
-            }
+            val message = if (isDuplicate) "Este correo electrónico ya está registrado." 
+                          else "Error de base de datos."
             
             call.respond(
                 HttpStatusCode.OK,
                 RegisterResponse(success = false, message = message)
             )
         } catch (e: Exception) {
-            println("❌ Error inesperado en registro: ${e.message}")
-            e.printStackTrace()
-
             call.respond(
                 HttpStatusCode.OK,
-                RegisterResponse(
-                    success = false, 
-                    message = "Ocurrió un error inesperado. Por favor, inténtalo más tarde."
-                )
+                RegisterResponse(success = false, message = "Ocurrió un error inesperado.")
             )
         }
     }

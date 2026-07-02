@@ -17,7 +17,7 @@ fun Route.generalRoutes() {
             }
             call.respondText("Conexión a PostgreSQL Railway OK")
         } catch (e: Exception) {
-            call.respondText("Error: \${e.message}")
+            call.respondText("Error: ${e.message}")
         }
     }
 }
