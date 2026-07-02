@@ -8,4 +8,6 @@ object PerfilesClientesTable : IntIdTable("perfiles_clientes") {
     val nombres = varchar("nombres", 100)
     val apellidos = varchar("apellidos", 100)
     val telefono = varchar("telefono", 20)
+    val fechaNacimiento = varchar("fecha_nacimiento", 20).nullable()
+    val direccion = varchar("direccion", 200).nullable()
 }
