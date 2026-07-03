@@ -54,21 +54,29 @@ fun Route.customerRoutes() {
             
             try {
                 val profile = transaction {
-                    val user = UsuariosTable.selectAll().where { UsuariosTable.email eq email }.single()
-                    val userId = user[UsuariosTable.id]
-                    val profileEntry = PerfilesClientesTable.selectAll().where { PerfilesClientesTable.usuarioId eq userId }.single()
-                    
-                    UserProfileResponse(
-                        nombres = profileEntry[PerfilesClientesTable.nombres],
-                        apellidos = profileEntry[PerfilesClientesTable.apellidos],
-                        email = user[UsuariosTable.email],
-                        telefono = profileEntry[PerfilesClientesTable.telefono],
-                        fechaNacimiento = profileEntry[PerfilesClientesTable.fechaNacimiento],
-                        direccion = profileEntry[PerfilesClientesTable.direccion]
-                    )
+                    // Cruce de tablas (Join) entre usuarios y perfiles_clientes
+                    (UsuariosTable innerJoin PerfilesClientesTable)
+                        .selectAll()
+                        .where { UsuariosTable.email eq email }
+                        .map { row ->
+                            UserProfileResponse(
+                                nombres = row[PerfilesClientesTable.nombres],
+                                apellidos = row[PerfilesClientesTable.apellidos],
+                                email = row[UsuariosTable.email],
+                                telefono = row[PerfilesClientesTable.telefono],
+                                fechaNacimiento = row[PerfilesClientesTable.fechaNacimiento],
+                                direccion = row[PerfilesClientesTable.direccion]
+                            )
+                        }.singleOrNull()
                 }
-                call.respond(profile)
+
+                if (profile != null) {
+                    call.respond(profile)
+                } else {
+                    call.respond(HttpStatusCode.NotFound, mapOf("mensaje" to "Perfil no encontrado"))
+                }
             } catch (e: Exception) {
+                println("Error profile: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, "Error al obtener perfil")
             }
         }
