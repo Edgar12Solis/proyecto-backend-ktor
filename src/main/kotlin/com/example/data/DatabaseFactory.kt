@@ -19,17 +19,8 @@ object DatabaseFactory {
         )
 
         transaction {
-            // ORDEN CRÍTICO: 1. Crear tablas base primero
-            SchemaUtils.create(UsuariosTable, ClientesTable)
-            
-            // ORDEN CRÍTICO: 2. Crear tablas que dependen de 'usuarios' (FKs)
-            SchemaUtils.create(
-                PerfilesClientesTable, 
-                PerfilesBarberosTable,
-                CitasTable
-            )
-            
-            // Sincronizar columnas faltantes si las tablas ya existían
+            // Un solo comando robusto para todo. 
+            // Exposed calculará el orden correcto (Usuarios primero, luego los Perfiles).
             SchemaUtils.createMissingTablesAndColumns(
                 UsuariosTable, 
                 ClientesTable,
@@ -37,8 +28,8 @@ object DatabaseFactory {
                 PerfilesBarberosTable,
                 CitasTable
             )
-
-            println("✅ Database Synced: Usuarios, Clientes, PerfilesClientes, PerfilesBarberos, Citas")
+            
+            println("✅ Database Synced: Todas las tablas y columnas están listas.")
         }
     }
 }
