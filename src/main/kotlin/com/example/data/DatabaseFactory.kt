@@ -19,28 +19,24 @@ object DatabaseFactory {
         )
 
         transaction {
-            // SchemaUtils.create crea las tablas si no existen.
-            // SchemaUtils.addMissingColumnsStatements genera los ALTER TABLE necesarios para columnas nuevas.
+            // ORDEN CRÍTICO: 1. Crear tablas base primero
+            SchemaUtils.create(UsuariosTable, ClientesTable)
+            
+            // ORDEN CRÍTICO: 2. Crear tablas que dependen de 'usuarios' (FKs)
             SchemaUtils.create(
+                PerfilesClientesTable, 
+                PerfilesBarberosTable,
+                CitasTable
+            )
+            
+            // Sincronizar columnas faltantes si las tablas ya existían
+            SchemaUtils.createMissingTablesAndColumns(
                 UsuariosTable, 
                 ClientesTable,
                 PerfilesClientesTable, 
                 PerfilesBarberosTable,
                 CitasTable
             )
-            
-            // Forzamos la creación de columnas que falten en tablas existentes
-            val missingColumns = SchemaUtils.addMissingColumnsStatements(
-                UsuariosTable, 
-                ClientesTable,
-                PerfilesClientesTable, 
-                PerfilesBarberosTable,
-                CitasTable
-            )
-            
-            if (missingColumns.isNotEmpty()) {
-                println("⚠️ Añadiendo columnas faltantes a la BD...")
-            }
 
             println("✅ Database Synced: Usuarios, Clientes, PerfilesClientes, PerfilesBarberos, Citas")
         }
