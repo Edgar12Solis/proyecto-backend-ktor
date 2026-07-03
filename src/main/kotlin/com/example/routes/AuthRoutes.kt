@@ -80,7 +80,7 @@ fun Route.authRoutes() {
             println("📝 Intentando registrar usuario: ${regReq.email}")
 
             transaction {
-                // 1. Crear el usuario con rol CLIENTE y password cifrada
+                // 1. Crear el usuario con rol CLIENTE y password hasheada
                 val userId = UsuariosTable.insertAndGetId {
                     it[UsuariosTable.nombre] = "${regReq.nombres} ${regReq.apellidos}"
                     it[UsuariosTable.email] = regReq.email
@@ -94,19 +94,23 @@ fun Route.authRoutes() {
                     it[PerfilesClientesTable.nombres] = regReq.nombres
                     it[PerfilesClientesTable.apellidos] = regReq.apellidos
                     it[PerfilesClientesTable.telefono] = regReq.telefono
+                    // Los campos nuevos (fecha_nacimiento y direccion) se inicializan como null si fallara la migracion automatica
+                    // Pero los incluimos explícitamente para que se creen si addMissingColumns funcionó
+                    it[PerfilesClientesTable.fechaNacimiento] = null
+                    it[PerfilesClientesTable.direccion] = null
                 }
             }
 
             println("✅ Registro exitoso para: ${regReq.email}")
             call.respond(
-                HttpStatusCode.OK, // Enviamos 200 para que la App lea el mensaje
+                HttpStatusCode.OK,
                 RegisterResponse(success = true, message = "¡Cuenta creada con éxito! Ya puedes iniciar sesión.")
             )
         } catch (e: ExposedSQLException) {
             println("❌ Error de BD en registro: ${e.message}")
             val isDuplicate = e.message?.contains("duplicate", ignoreCase = true) == true || e.sqlState == "23505"
             val message = if (isDuplicate) "Este correo electrónico ya está registrado." 
-                          else "Error de base de datos interno."
+                          else "Error de base de datos interno: ${e.message}"
             
             call.respond(
                 HttpStatusCode.OK,
