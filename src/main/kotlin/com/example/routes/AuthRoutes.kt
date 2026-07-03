@@ -19,24 +19,40 @@ fun Route.authRoutes() {
     post("/login") {
         try {
             val loginReq = call.receive<LoginRequest>()
+            println("🔍 Intento de login para: ${loginReq.email}")
+            
             val user = transaction {
                 UsuariosTable.selectAll().where {
                     UsuariosTable.email eq loginReq.email
                 }.singleOrNull()
             }
 
-            if (user != null && PasswordHasher.check(loginReq.password, user[UsuariosTable.password])) {
-                val token = JwtConfig.generateToken(loginReq.email)
-                call.respond(
-                    HttpStatusCode.OK,
-                    LoginResponse(
-                        success = true,
-                        message = "¡Bienvenido de nuevo!",
-                        rol = user[UsuariosTable.rol],
-                        token = token
+            if (user != null) {
+                val dbPassword = user[UsuariosTable.password]
+                if (PasswordHasher.check(loginReq.password, dbPassword)) {
+                    val token = JwtConfig.generateToken(loginReq.email)
+                    println("✅ Login exitoso: ${loginReq.email}")
+                    call.respond(
+                        HttpStatusCode.OK,
+                        LoginResponse(
+                            success = true,
+                            message = "¡Bienvenido de nuevo!",
+                            rol = user[UsuariosTable.rol],
+                            token = token
+                        )
                     )
-                )
+                } else {
+                    println("❌ Contraseña incorrecta para: ${loginReq.email}")
+                    call.respond(
+                        HttpStatusCode.OK,
+                        LoginResponse(
+                            success = false,
+                            message = "Correo o contraseña incorrectos. Por favor, intenta de nuevo."
+                        )
+                    )
+                }
             } else {
+                println("❌ Usuario no encontrado: ${loginReq.email}")
                 call.respond(
                     HttpStatusCode.OK,
                     LoginResponse(
@@ -46,12 +62,13 @@ fun Route.authRoutes() {
                 )
             }
         } catch (e: Exception) {
-            println("❌ Error en login: \${e.message}")
+            println("❌ ERROR CRÍTICO en login: ${e.message}")
+            e.printStackTrace()
             call.respond(
                 HttpStatusCode.OK,
                 LoginResponse(
                     success = false, 
-                    message = "Hubo un problema de conexión con el servidor. Inténtalo más tarde."
+                    message = "Error de conexión con el servidor. Inténtalo más tarde."
                 )
             )
         }
@@ -60,11 +77,12 @@ fun Route.authRoutes() {
     post("/register") {
         try {
             val regReq = call.receive<RegisterRequest>()
+            println("📝 Intentando registrar usuario: ${regReq.email}")
 
             transaction {
-                // 1. Crear el usuario con rol CLIENTE y password hasheada
+                // 1. Crear el usuario con rol CLIENTE y password cifrada
                 val userId = UsuariosTable.insertAndGetId {
-                    it[UsuariosTable.nombre] = "\${regReq.nombres} \${regReq.apellidos}"
+                    it[UsuariosTable.nombre] = "${regReq.nombres} ${regReq.apellidos}"
                     it[UsuariosTable.email] = regReq.email
                     it[UsuariosTable.password] = PasswordHasher.hash(regReq.password)
                     it[UsuariosTable.rol] = "CLIENTE"
@@ -79,23 +97,27 @@ fun Route.authRoutes() {
                 }
             }
 
+            println("✅ Registro exitoso para: ${regReq.email}")
             call.respond(
-                HttpStatusCode.Created,
+                HttpStatusCode.OK, // Enviamos 200 para que la App lea el mensaje
                 RegisterResponse(success = true, message = "¡Cuenta creada con éxito! Ya puedes iniciar sesión.")
             )
         } catch (e: ExposedSQLException) {
+            println("❌ Error de BD en registro: ${e.message}")
             val isDuplicate = e.message?.contains("duplicate", ignoreCase = true) == true || e.sqlState == "23505"
             val message = if (isDuplicate) "Este correo electrónico ya está registrado." 
-                          else "Error de base de datos."
+                          else "Error de base de datos interno."
             
             call.respond(
                 HttpStatusCode.OK,
                 RegisterResponse(success = false, message = message)
             )
         } catch (e: Exception) {
+            println("❌ Error inesperado en registro: ${e.message}")
+            e.printStackTrace()
             call.respond(
                 HttpStatusCode.OK,
-                RegisterResponse(success = false, message = "Ocurrió un error inesperado.")
+                RegisterResponse(success = false, message = "Ocurrió un error inesperado al crear la cuenta.")
             )
         }
     }
