@@ -81,25 +81,32 @@ fun Route.customerRoutes() {
             }
         }
         
-        post("/customer/update-profile") {
+        put("/customer/profile/update") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
-            val req = call.receive<UpdateProfileRequest>()
             
             try {
+                val req = call.receive<UpdateProfileRequest>()
+                
+                // Validación básica de campos obligatorios
+                if (req.nombres.isBlank() || req.apellidos.isBlank() || req.telefono.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("success" to false, "message" to "Nombres, apellidos y teléfono son obligatorios"))
+                    return@put
+                }
+
                 transaction {
                     val user = UsuariosTable.selectAll().where { UsuariosTable.email eq email }.single()
                     val userId = user[UsuariosTable.id]
                     
-                    // Actualizar Usuario
+                    // 1. Actualizar Usuario (nombre completo y password opcional)
                     UsuariosTable.update({ UsuariosTable.id eq userId }) {
-                        it[UsuariosTable.nombre] = "\${req.nombres} \${req.apellidos}"
+                        it[UsuariosTable.nombre] = "${req.nombres} ${req.apellidos}"
                         if (!req.password.isNullOrBlank()) {
                             it[UsuariosTable.password] = PasswordHasher.hash(req.password)
                         }
                     }
                     
-                    // Actualizar Perfil
+                    // 2. Actualizar Perfil Detallado
                     PerfilesClientesTable.update({ PerfilesClientesTable.usuarioId eq userId }) {
                         it[PerfilesClientesTable.nombres] = req.nombres
                         it[PerfilesClientesTable.apellidos] = req.apellidos
@@ -108,9 +115,10 @@ fun Route.customerRoutes() {
                         it[PerfilesClientesTable.direccion] = req.direccion
                     }
                 }
-                call.respond(mapOf("success" to true, "message" to "Perfil actualizado con éxito"))
+                call.respond(HttpStatusCode.OK, mapOf("success" to true, "message" to "Perfil actualizado correctamente"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, mapOf("success" to false, "message" to "Error al actualizar perfil"))
+                println("❌ Error al actualizar perfil: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, mapOf("success" to false, "message" to "Error al actualizar el perfil"))
             }
         }
     }

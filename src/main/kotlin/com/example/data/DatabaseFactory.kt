@@ -29,7 +29,7 @@ object DatabaseFactory {
                 CitasTable
             )
             
-            println("✅ Database Synced: Todas las tablas y columnas están listas.")
+            println("Database Synced: Todas las tablas y columnas están listas.")
         }
     }
 }
