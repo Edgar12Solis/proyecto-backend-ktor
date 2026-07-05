@@ -16,6 +16,7 @@ data class AdminProfileResponse(
     val nombres: String,
     val apellidos: String,
     val email: String,
+    val telefono: String,
     val rol: String
 )
 
@@ -40,4 +41,13 @@ data class CreateAdminRequest(
 data class AdminActionResponse(
     val success: Boolean,
     val message: String
+)
+
+@Serializable
+data class UpdateAdminProfileRequest(
+    val nombres: String,
+    val apellidos: String,
+    val telefono: String,
+    val email: String,
+    val password: String? = null
 )
