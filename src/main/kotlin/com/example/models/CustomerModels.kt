@@ -36,3 +36,9 @@ data class UpdateProfileRequest(
     val direccion: String?,
     val password: String? = null
 )
+
+@Serializable
+data class UpdateProfileResponse(
+    val success: Boolean,
+    val message: String
+)
