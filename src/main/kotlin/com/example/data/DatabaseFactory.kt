@@ -1,7 +1,10 @@
 package com.example.data
 
+import com.example.plugins.PasswordHasher
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 
 object DatabaseFactory {
@@ -29,7 +32,19 @@ object DatabaseFactory {
                 CitasTable
             )
             
-            println("Database Synced: Todas las tablas y columnas están listas.")
+            // CREACIÓN AUTOMÁTICA DE ADMIN (Si no existe ninguno)
+            val adminExists = UsuariosTable.selectAll().where { UsuariosTable.rol eq "ADMIN" }.count() > 0
+            if (!adminExists) {
+                UsuariosTable.insert {
+                    it[UsuariosTable.nombre] = "Administrador Sistema"
+                    it[UsuariosTable.email] = "admin@wolf.com"
+                    it[UsuariosTable.password] = PasswordHasher.hash("admin123") // IMPORTANTE: Cambia esto luego
+                    it[UsuariosTable.rol] = "ADMIN"
+                }
+                println("👑 Administrador por defecto creado: admin@wolf.com / admin123")
+            }
+            
+            println("✅ Database Synced: Todas las tablas y columnas están listas.")
         }
     }
 }
