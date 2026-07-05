@@ -4,6 +4,7 @@ import com.example.plugins.PasswordHasher
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 
@@ -23,24 +24,32 @@ object DatabaseFactory {
 
         transaction {
             // Un solo comando robusto para todo. 
-            // Exposed calculará el orden correcto (Usuarios primero, luego los Perfiles).
             SchemaUtils.createMissingTablesAndColumns(
                 UsuariosTable, 
                 ClientesTable,
                 PerfilesClientesTable, 
                 PerfilesBarberosTable,
+                PerfilesAdminsTable,
                 CitasTable
             )
             
             // CREACIÓN AUTOMÁTICA DE ADMIN (Si no existe ninguno)
             val adminExists = UsuariosTable.selectAll().where { UsuariosTable.rol eq "ADMIN" }.count() > 0
             if (!adminExists) {
-                UsuariosTable.insert {
+                val adminId = UsuariosTable.insertAndGetId {
                     it[UsuariosTable.nombre] = "Administrador Sistema"
                     it[UsuariosTable.email] = "admin@wolf.com"
-                    it[UsuariosTable.password] = PasswordHasher.hash("admin123") // IMPORTANTE: Cambia esto luego
+                    it[UsuariosTable.password] = PasswordHasher.hash("admin123")
                     it[UsuariosTable.rol] = "ADMIN"
                 }
+                
+                PerfilesAdminsTable.insert {
+                    it[PerfilesAdminsTable.usuarioId] = adminId
+                    it[PerfilesAdminsTable.nombres] = "Administrador"
+                    it[PerfilesAdminsTable.apellidos] = "Sistema"
+                    it[PerfilesAdminsTable.telefono] = "0000000000"
+                }
+
                 println("👑 Administrador por defecto creado: admin@wolf.com / admin123")
             }
             

@@ -1,7 +1,6 @@
 package com.example.routes
 
-import com.example.data.PerfilesBarberosTable
-import com.example.data.UsuariosTable
+import com.example.data.*
 import com.example.models.*
 import com.example.plugins.PasswordHasher
 import io.ktor.http.*
@@ -19,26 +18,25 @@ fun Route.adminRoutes() {
     // Rutas protegidas para administradores
     authenticate("auth-jwt") {
 
-        // 1. Obtener Mi Perfil de Admin
+        // 1. Obtener Mi Perfil de Admin (Con JOIN para el teléfono)
         get("/admin/profile") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
 
             try {
                 val adminData = transaction {
-                    UsuariosTable.selectAll().where { UsuariosTable.email eq email }.map { row ->
-                        val nombreCompleto = row[UsuariosTable.nombre]
-                        val partes = nombreCompleto.split(" ")
-                        val nombres = partes.firstOrNull() ?: ""
-                        val apellidos = if (partes.size > 1) partes.drop(1).joinToString(" ") else ""
-                        
-                        AdminProfileResponse(
-                            nombres = nombres,
-                            apellidos = apellidos,
-                            email = row[UsuariosTable.email],
-                            rol = row[UsuariosTable.rol]
-                        )
-                    }.singleOrNull()
+                    (UsuariosTable innerJoin PerfilesAdminsTable)
+                        .selectAll()
+                        .where { UsuariosTable.email eq email }
+                        .map { row ->
+                            AdminProfileResponse(
+                                nombres = row[PerfilesAdminsTable.nombres],
+                                apellidos = row[PerfilesAdminsTable.apellidos],
+                                email = row[UsuariosTable.email],
+                                telefono = row[PerfilesAdminsTable.telefono],
+                                rol = row[UsuariosTable.rol]
+                            )
+                        }.singleOrNull()
                 }
 
                 if (adminData != null) {
@@ -47,11 +45,48 @@ fun Route.adminRoutes() {
                     call.respond(HttpStatusCode.NotFound, AdminActionResponse(false, "Perfil de administrador no encontrado"))
                 }
             } catch (e: Exception) {
+                println("Error profile admin: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, AdminActionResponse(false, "Error al obtener perfil"))
             }
         }
 
-        // 2. Listar Todos los Administradores
+        // 2. Actualizar Perfil de Admin
+        put("/admin/profile/update") {
+            val principal = call.principal<JWTPrincipal>()
+            val emailFromToken = principal?.payload?.getClaim("email")?.asString() ?: ""
+            
+            try {
+                val req = call.receive<UpdateAdminProfileRequest>()
+                
+                transaction {
+                    val user = UsuariosTable.selectAll().where { UsuariosTable.email eq emailFromToken }.single()
+                    val userId = user[UsuariosTable.id]
+                    
+                    // Actualizar Tabla Usuarios (nombre, email y password si viene)
+                    UsuariosTable.update({ UsuariosTable.id eq userId }) {
+                        it[nombre] = "${req.nombres} ${req.apellidos}"
+                        it[email] = req.email
+                        if (!req.password.isNullOrBlank()) {
+                            it[password] = PasswordHasher.hash(req.password)
+                        }
+                    }
+                    
+                    // Actualizar Tabla PerfilesAdmins (teléfono, nombres, apellidos)
+                    PerfilesAdminsTable.update({ PerfilesAdminsTable.usuarioId eq userId }) {
+                        it[nombres] = req.nombres
+                        it[apellidos] = req.apellidos
+                        it[telefono] = req.telefono
+                    }
+                }
+                
+                call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Perfil actualizado con éxito"))
+            } catch (e: Exception) {
+                println("Error update admin profile: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, AdminActionResponse(false, "Error al actualizar el perfil"))
+            }
+        }
+
+        // 3. Listar Todos los Administradores
         get("/admin/list") {
             try {
                 val admins = transaction {
@@ -75,17 +110,24 @@ fun Route.adminRoutes() {
             }
         }
 
-        // 3. Crear Nuevo Administrador
+        // 4. Crear Nuevo Administrador
         post("/admin/add") {
             try {
                 val req = call.receive<CreateAdminRequest>()
                 
                 transaction {
-                    UsuariosTable.insert {
+                    val userId = UsuariosTable.insertAndGetId {
                         it[nombre] = "${req.nombres} ${req.apellidos}"
                         it[email] = req.email
                         it[password] = PasswordHasher.hash(req.password)
                         it[rol] = "ADMIN"
+                    }
+                    
+                    PerfilesAdminsTable.insert {
+                        it[usuarioId] = userId
+                        it[nombres] = req.nombres
+                        it[apellidos] = req.apellidos
+                        it[telefono] = req.telefono
                     }
                 }
                 call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Administrador creado correctamente"))
@@ -94,7 +136,7 @@ fun Route.adminRoutes() {
             }
         }
 
-        // Registro de Barberos (Mantenemos la funcionalidad anterior bajo protección)
+        // 5. Registro de Barberos
         post("/admin/barberos") {
             try {
                 val req = call.receive<BarberoCreateRequest>()
