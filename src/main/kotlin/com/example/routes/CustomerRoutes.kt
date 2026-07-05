@@ -44,6 +44,7 @@ fun Route.customerRoutes() {
                 }
                 call.respond(data)
             } catch (e: Exception) {
+                println("❌ Error dashboard: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, "Error al obtener datos del dashboard")
             }
         }
@@ -76,7 +77,7 @@ fun Route.customerRoutes() {
                     call.respond(HttpStatusCode.NotFound, mapOf("mensaje" to "Perfil no encontrado"))
                 }
             } catch (e: Exception) {
-                println("Error profile: ${e.message}")
+                println("❌ Error profile: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, "Error al obtener perfil")
             }
         }
@@ -88,9 +89,12 @@ fun Route.customerRoutes() {
             try {
                 val req = call.receive<UpdateProfileRequest>()
                 
-                // Validación básica de campos obligatorios
+                // Validación básica
                 if (req.nombres.isBlank() || req.apellidos.isBlank() || req.telefono.isBlank()) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("success" to false, "message" to "Nombres, apellidos y teléfono son obligatorios"))
+                    call.respond(
+                        HttpStatusCode.OK, 
+                        UpdateProfileResponse(success = false, message = "Nombres, apellidos y teléfono son obligatorios")
+                    )
                     return@put
                 }
 
@@ -98,7 +102,7 @@ fun Route.customerRoutes() {
                     val user = UsuariosTable.selectAll().where { UsuariosTable.email eq email }.single()
                     val userId = user[UsuariosTable.id]
                     
-                    // 1. Actualizar Usuario (nombre completo y password opcional)
+                    // 1. Actualizar Usuario
                     UsuariosTable.update({ UsuariosTable.id eq userId }) {
                         it[UsuariosTable.nombre] = "${req.nombres} ${req.apellidos}"
                         if (!req.password.isNullOrBlank()) {
@@ -106,7 +110,7 @@ fun Route.customerRoutes() {
                         }
                     }
                     
-                    // 2. Actualizar Perfil Detallado
+                    // 2. Actualizar Perfil
                     PerfilesClientesTable.update({ PerfilesClientesTable.usuarioId eq userId }) {
                         it[PerfilesClientesTable.nombres] = req.nombres
                         it[PerfilesClientesTable.apellidos] = req.apellidos
@@ -115,10 +119,16 @@ fun Route.customerRoutes() {
                         it[PerfilesClientesTable.direccion] = req.direccion
                     }
                 }
-                call.respond(HttpStatusCode.OK, mapOf("success" to true, "message" to "Perfil actualizado correctamente"))
+                call.respond(
+                    HttpStatusCode.OK, 
+                    UpdateProfileResponse(success = true, message = "Perfil actualizado correctamente")
+                )
             } catch (e: Exception) {
                 println("❌ Error al actualizar perfil: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, mapOf("success" to false, "message" to "Error al actualizar el perfil"))
+                call.respond(
+                    HttpStatusCode.OK, 
+                    UpdateProfileResponse(success = false, message = "Error al actualizar el perfil")
+                )
             }
         }
     }
