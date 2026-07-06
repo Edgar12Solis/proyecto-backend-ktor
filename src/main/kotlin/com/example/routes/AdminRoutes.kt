@@ -25,15 +25,21 @@ fun Route.adminRoutes() {
 
             try {
                 val adminData = transaction {
-                    (UsuariosTable innerJoin PerfilesAdminsTable)
+                    // Usamos leftJoin para que, si no hay registro en PerfilesAdminsTable,
+                    // aún así devuelva los datos básicos de UsuariosTable.
+                    (UsuariosTable leftJoin PerfilesAdminsTable)
                         .selectAll()
                         .where { UsuariosTable.email eq email }
                         .map { row ->
+                            // Si el JOIN es nulo, usamos valores por defecto o el nombre completo del usuario
+                            val nombreCompleto = row[UsuariosTable.nombre]
+                            val partes = nombreCompleto.split(" ")
+                            
                             AdminProfileResponse(
-                                nombres = row[PerfilesAdminsTable.nombres],
-                                apellidos = row[PerfilesAdminsTable.apellidos],
+                                nombres = row.getOrNull(PerfilesAdminsTable.nombres) ?: partes.firstOrNull() ?: "",
+                                apellidos = row.getOrNull(PerfilesAdminsTable.apellidos) ?: if (partes.size > 1) partes.drop(1).joinToString(" ") else "",
                                 email = row[UsuariosTable.email],
-                                telefono = row[PerfilesAdminsTable.telefono],
+                                telefono = row.getOrNull(PerfilesAdminsTable.telefono) ?: "",
                                 rol = row[UsuariosTable.rol]
                             )
                         }.singleOrNull()
@@ -42,10 +48,11 @@ fun Route.adminRoutes() {
                 if (adminData != null) {
                     call.respond(adminData)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, AdminActionResponse(false, "Perfil de administrador no encontrado"))
+                    call.respond(HttpStatusCode.NotFound, AdminActionResponse(false, "Administrador no encontrado"))
                 }
             } catch (e: Exception) {
-                println("Error profile admin: ${e.message}")
+                println("❌ Error profile admin: ${e.message}")
+                e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, AdminActionResponse(false, "Error al obtener perfil"))
             }
         }
@@ -71,11 +78,21 @@ fun Route.adminRoutes() {
                         }
                     }
                     
-                    // Actualizar Tabla PerfilesAdmins (teléfono, nombres, apellidos)
-                    PerfilesAdminsTable.update({ PerfilesAdminsTable.usuarioId eq userId }) {
-                        it[nombres] = req.nombres
-                        it[apellidos] = req.apellidos
-                        it[telefono] = req.telefono
+                    // 2. Actualizar o Insertar Tabla PerfilesAdmins
+                    val profileExists = PerfilesAdminsTable.selectAll().where { PerfilesAdminsTable.usuarioId eq userId }.count() > 0
+                    if (profileExists) {
+                        PerfilesAdminsTable.update({ PerfilesAdminsTable.usuarioId eq userId }) {
+                            it[nombres] = req.nombres
+                            it[apellidos] = req.apellidos
+                            it[telefono] = req.telefono
+                        }
+                    } else {
+                        PerfilesAdminsTable.insert {
+                            it[usuarioId] = userId
+                            it[nombres] = req.nombres
+                            it[apellidos] = req.apellidos
+                            it[telefono] = req.telefono
+                        }
                     }
                 }
                 
