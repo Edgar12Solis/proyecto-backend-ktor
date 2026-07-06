@@ -52,6 +52,24 @@ object DatabaseFactory {
 
                 println("👑 Administrador por defecto creado: admin@wolf.com / admin123")
             }
+
+            // ASEGURAR PERFILES PARA TODOS LOS ADMINS EXISTENTES
+            val allAdmins = UsuariosTable.selectAll().where { UsuariosTable.rol eq "ADMIN" }.toList()
+            for (admin in allAdmins) {
+                val adminId = admin[UsuariosTable.id]
+                val hasProfile = PerfilesAdminsTable.selectAll().where { PerfilesAdminsTable.usuarioId eq adminId }.count() > 0
+                if (!hasProfile) {
+                    val fullNombre = admin[UsuariosTable.nombre]
+                    val parts = fullNombre.split(" ")
+                    PerfilesAdminsTable.insert {
+                        it[PerfilesAdminsTable.usuarioId] = adminId
+                        it[PerfilesAdminsTable.nombres] = parts.firstOrNull() ?: "Admin"
+                        it[PerfilesAdminsTable.apellidos] = if (parts.size > 1) parts.drop(1).joinToString(" ") else "Sistema"
+                        it[PerfilesAdminsTable.telefono] = "0000000000"
+                    }
+                    println("✅ Perfil de administrador creado para: ${admin[UsuariosTable.email]}")
+                }
+            }
             
             println("✅ Database Synced: Todas las tablas y columnas están listas.")
         }
