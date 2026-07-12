@@ -178,5 +178,77 @@ fun Route.adminRoutes() {
                 call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Error al registrar barbero: ${e.message}"))
             }
         }
+
+        // 6. Obtener Citas por Fecha
+        get("/admin/appointments") {
+            val dateParam = call.request.queryParameters["date"]
+            if (dateParam == null) {
+                call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Falta el parámetro 'date'"))
+                return@get
+            }
+
+            try {
+                val appointments = transaction {
+                    // Joins complejos: Citas -> Usuarios (Cliente) -> PerfilesClientes y Citas -> Usuarios (Barbero)
+                    val clienteAlias = UsuariosTable.alias("cliente")
+                    val barberoAlias = UsuariosTable.alias("barbero")
+
+                    CitasTable
+                        .join(clienteAlias, JoinType.INNER, additionalConstraint = { CitasTable.usuarioId eq clienteAlias[UsuariosTable.id] })
+                        .join(PerfilesClientesTable, JoinType.LEFT, additionalConstraint = { clienteAlias[UsuariosTable.id] eq PerfilesClientesTable.usuarioId })
+                        .join(barberoAlias, JoinType.INNER, additionalConstraint = { CitasTable.barberoId eq barberoAlias[UsuariosTable.id] })
+                        .selectAll()
+                        .where { CitasTable.date eq dateParam }
+                        .map { row ->
+                            AdminAppointmentResponse(
+                                id = row[CitasTable.id].value,
+                                customer = AdminCustomerInfo(
+                                    nombre = row[clienteAlias[UsuariosTable.nombre]],
+                                    telefono = row.getOrNull(PerfilesClientesTable.telefono) ?: ""
+                                ),
+                                date = row[CitasTable.date],
+                                startTime = row[CitasTable.startTime],
+                                status = row[CitasTable.status],
+                                service = AdminServiceInfo(
+                                    nombre = row[CitasTable.serviceName],
+                                    precio = row[CitasTable.totalPrice]
+                                ),
+                                barber = AdminBarberInfo(
+                                    nombreCompleto = row[barberoAlias[UsuariosTable.nombre]]
+                                )
+                            )
+                        }
+                }
+                call.respond(appointments)
+            } catch (e: Exception) {
+                println("❌ Error fetching appointments: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, AdminActionResponse(false, "Error al obtener citas"))
+            }
+        }
+
+        // 7. Cancelar Cita
+        post("/admin/appointments/{id}/cancel") {
+            val id = call.parameters["id"]?.toIntOrNull()
+            if (id == null) {
+                call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "ID de cita inválido"))
+                return@post
+            }
+
+            try {
+                val updated = transaction {
+                    CitasTable.update({ CitasTable.id eq id }) {
+                        it[status] = "Cancelada"
+                    }
+                }
+
+                if (updated > 0) {
+                    call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Cita cancelada con éxito"))
+                } else {
+                    call.respond(HttpStatusCode.NotFound, AdminActionResponse(false, "Cita no encontrada"))
+                }
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, AdminActionResponse(false, "Error al cancelar cita"))
+            }
+        }
     }
 }

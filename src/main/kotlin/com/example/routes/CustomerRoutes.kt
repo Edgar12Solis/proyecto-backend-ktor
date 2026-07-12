@@ -34,7 +34,7 @@ fun Route.customerRoutes() {
                             AppointmentDTO(
                                 serviceName = it[CitasTable.serviceName],
                                 date = it[CitasTable.date],
-                                time = it[CitasTable.time],
+                                time = it[CitasTable.startTime],
                                 totalPrice = it[CitasTable.totalPrice],
                                 status = it[CitasTable.status]
                             )
@@ -44,7 +44,7 @@ fun Route.customerRoutes() {
                 }
                 call.respond(data)
             } catch (e: Exception) {
-                println("❌ Error dashboard: ${e.message}")
+                println("Error dashboard: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, "Error al obtener datos del dashboard")
             }
         }
@@ -77,7 +77,7 @@ fun Route.customerRoutes() {
                     call.respond(HttpStatusCode.NotFound, mapOf("mensaje" to "Perfil no encontrado"))
                 }
             } catch (e: Exception) {
-                println("❌ Error profile: ${e.message}")
+                println("Error profile: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, "Error al obtener perfil")
             }
         }
@@ -124,7 +124,7 @@ fun Route.customerRoutes() {
                     UpdateProfileResponse(success = true, message = "Perfil actualizado correctamente")
                 )
             } catch (e: Exception) {
-                println("❌ Error al actualizar perfil: ${e.message}")
+                println("Error al actualizar perfil: ${e.message}")
                 call.respond(
                     HttpStatusCode.OK, 
                     UpdateProfileResponse(success = false, message = "Error al actualizar el perfil")

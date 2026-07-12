@@ -30,7 +30,16 @@ object DatabaseFactory {
                 PerfilesClientesTable, 
                 PerfilesBarberosTable,
                 PerfilesAdminsTable,
-                CitasTable
+                CitasTable,
+                CategoriasServiciosTable,
+                ServiciosTable,
+                CategoriasProductosTable,
+                ProductosTable,
+                PromocionesTable,
+                PromocionServiciosTable,
+                VentasTable,
+                DetalleVentasTable,
+                HorariosBarberosTable
             )
             
             // CREACIÓN AUTOMÁTICA DE ADMIN (Si no existe ninguno)

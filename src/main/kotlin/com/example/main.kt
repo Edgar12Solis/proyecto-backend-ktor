@@ -34,6 +34,12 @@ fun main() {
             adminRoutes()
             usuarioRoutes()
             customerRoutes()
+            terminalRoutes()
+            inventoryRoutes()
+            barberMgmtRoutes()
+            serviceMgmtRoutes()
+            reportRoutes()
+            customerMgmtRoutes()
         }
     }.start(wait = true)
 }
