@@ -9,6 +9,8 @@ import io.ktor.server.application.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.http.*
 import io.ktor.server.routing.*
+import io.ktor.server.http.content.*
+import java.io.File
 
 fun main() {
     val port = System.getenv("PORT")?.toInt() ?: 8080
@@ -40,6 +42,9 @@ fun main() {
             serviceMgmtRoutes()
             reportRoutes()
             customerMgmtRoutes()
+
+            // Servir fotos de perfil de forma profesional
+            staticFiles("/uploads", File("uploads"))
         }
     }.start(wait = true)
 }

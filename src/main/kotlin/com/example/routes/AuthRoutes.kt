@@ -125,4 +125,38 @@ fun Route.authRoutes() {
             )
         }
     }
+
+    // 3. Login Biométrico
+    post("/login/biometric") {
+        try {
+            val req = call.receive<BiometricLoginRequest>()
+            println("🔑 Intento de login biométrico para: ${req.email}")
+
+            val user = transaction {
+                UsuariosTable.selectAll().where {
+                    (UsuariosTable.email eq req.email) and (UsuariosTable.biometricToken eq req.deviceId)
+                }.singleOrNull()
+            }
+
+            if (user != null) {
+                val token = JwtConfig.generateToken(req.email)
+                call.respond(
+                    HttpStatusCode.OK,
+                    LoginResponse(
+                        success = true,
+                        message = "¡Autenticación biométrica exitosa!",
+                        rol = user[UsuariosTable.rol],
+                        token = token
+                    )
+                )
+            } else {
+                call.respond(
+                    HttpStatusCode.OK,
+                    LoginResponse(success = false, message = "Biometría no vinculada o dispositivo no reconocido.")
+                )
+            }
+        } catch (e: Exception) {
+            call.respond(HttpStatusCode.OK, LoginResponse(false, "Error en autenticación biométrica."))
+        }
+    }
 }

@@ -14,6 +14,17 @@ data class BarberScheduleRequest(
 )
 
 @Serializable
+data class BarberCreateRequest(
+    val nombreCompleto: String,
+    val email: String,
+    val telefono: String,
+    val bio: String,
+    val activo: Boolean,
+    val scheduleConfiguration: String,
+    val specialties: List<String> // Nombres de categorías
+)
+
+@Serializable
 data class BarberFullProfileResponse(
     val id: Int,
     val nombreCompleto: String,
@@ -21,5 +32,6 @@ data class BarberFullProfileResponse(
     val telefono: String,
     val bio: String,
     val activo: Boolean,
+    val scheduleConfiguration: String,
     val specialties: List<String>
 )

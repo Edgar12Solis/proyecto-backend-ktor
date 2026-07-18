@@ -39,7 +39,8 @@ object DatabaseFactory {
                 PromocionServiciosTable,
                 VentasTable,
                 DetalleVentasTable,
-                HorariosBarberosTable
+                HorariosBarberosTable,
+                BarberoEspecialidadesTable
             )
             
             // CREACIÓN AUTOMÁTICA DE ADMIN (Si no existe ninguno)

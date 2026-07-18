@@ -131,5 +131,34 @@ fun Route.customerRoutes() {
                 )
             }
         }
+
+        // 4. Subir Foto de Perfil
+        post("/customer/profile/photo") {
+            val principal = call.principal<JWTPrincipal>()
+            val email = principal?.payload?.getClaim("email")?.asString() ?: ""
+            
+            try {
+                val bytes = call.receive<ByteArray>()
+                val fileName = "profile_${System.currentTimeMillis()}.jpg"
+                val file = java.io.File("uploads/$fileName")
+                
+                // Asegurar que existe la carpeta
+                file.parentFile.mkdirs()
+                file.writeBytes(bytes)
+
+                val publicUrl = "/uploads/$fileName"
+
+                transaction {
+                    UsuariosTable.update({ UsuariosTable.email eq email }) {
+                        it[imagenUrl] = publicUrl
+                    }
+                }
+
+                call.respond(HttpStatusCode.OK, mapOf("success" to true, "message" to "Foto actualizada con éxito", "imageUrl" to publicUrl))
+            } catch (e: Exception) {
+                println("❌ Error subiendo foto: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, mapOf("success" to false, "message" to "Error al guardar la imagen"))
+            }
+        }
     }
 }
