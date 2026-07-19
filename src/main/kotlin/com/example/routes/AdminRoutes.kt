@@ -179,6 +179,24 @@ fun Route.adminRoutes() {
             }
         }
 
+        // 8. Registro de Huella (Vincular dispositivo actual)
+        post("/admin/biometric/register") {
+            val principal = call.principal<JWTPrincipal>()
+            val email = principal?.payload?.getClaim("email")?.asString() ?: ""
+            
+            try {
+                val req = call.receive<BiometricRegisterRequest>()
+                transaction {
+                    UsuariosTable.update({ UsuariosTable.email eq email }) {
+                        it[biometricToken] = req.biometricToken
+                    }
+                }
+                call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Huella vinculada con éxito"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, AdminActionResponse(false, "Error al vincular huella"))
+            }
+        }
+
         // 6. Obtener Citas por Fecha
         get("/admin/appointments") {
             val dateParam = call.request.queryParameters["date"]
