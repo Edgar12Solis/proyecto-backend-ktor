@@ -4,10 +4,10 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class BiometricRegisterRequest(
-    val biometricToken: String
+    val token: String
 )
 
 @Serializable
 data class BiometricLoginRequest(
-    val biometricToken: String
+    val token: String
 )

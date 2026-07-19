@@ -188,7 +188,7 @@ fun Route.adminRoutes() {
                 val req = call.receive<BiometricRegisterRequest>()
                 transaction {
                     UsuariosTable.update({ UsuariosTable.email eq email }) {
-                        it[biometricToken] = req.biometricToken
+                        it[biometricToken] = req.token
                     }
                 }
                 call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Huella vinculada con éxito"))

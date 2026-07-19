@@ -134,7 +134,7 @@ fun Route.authRoutes() {
 
             val user = transaction {
                 UsuariosTable.selectAll().where {
-                    UsuariosTable.biometricToken eq req.biometricToken
+                    UsuariosTable.biometricToken eq req.token
                 }.singleOrNull()
             }
 
