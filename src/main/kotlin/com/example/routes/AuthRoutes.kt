@@ -7,6 +7,8 @@ import com.example.plugins.JwtConfig
 import com.example.plugins.PasswordHasher
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -161,6 +163,57 @@ fun Route.authRoutes() {
         } catch (e: Exception) {
             println("❌ Error en login biométrico: ${e.message}")
             call.respond(HttpStatusCode.OK, LoginResponse(false, "Error en autenticación biométrica."))
+        }
+    }
+
+    // 4. Verificar Contraseña Actual (Barrera de Seguridad)
+    authenticate("auth-jwt") {
+        post("/auth/verify-password") {
+            val principal = call.principal<JWTPrincipal>()
+            val email = principal?.payload?.getClaim("email")?.asString() ?: ""
+            
+            try {
+                val req = call.receive<VerifyPasswordRequest>()
+                val user = transaction {
+                    UsuariosTable.selectAll().where { UsuariosTable.email eq email }.singleOrNull()
+                }
+
+                if (user != null && PasswordHasher.check(req.password, user[UsuariosTable.password])) {
+                    call.respond(HttpStatusCode.OK, SecurityActionResponse(true, "Contraseña verificada"))
+                } else {
+                    call.respond(HttpStatusCode.OK, SecurityActionResponse(false, "La contraseña actual es incorrecta"))
+                }
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.OK, SecurityActionResponse(false, "Error al verificar contraseña"))
+            }
+        }
+
+        // 5. Cambiar Contraseña
+        put("/auth/change-password") {
+            val principal = call.principal<JWTPrincipal>()
+            val email = principal?.payload?.getClaim("email")?.asString() ?: ""
+            
+            try {
+                val req = call.receive<ChangePasswordRequest>()
+                if (req.newPassword.isBlank()) {
+                    call.respond(HttpStatusCode.OK, SecurityActionResponse(false, "La nueva contraseña no puede estar vacía"))
+                    return@put
+                }
+
+                val updated = transaction {
+                    UsuariosTable.update({ UsuariosTable.email eq email }) {
+                        it[password] = PasswordHasher.hash(req.newPassword)
+                    }
+                }
+
+                if (updated > 0) {
+                    call.respond(HttpStatusCode.OK, SecurityActionResponse(true, "Contraseña actualizada con éxito"))
+                } else {
+                    call.respond(HttpStatusCode.OK, SecurityActionResponse(false, "No se pudo actualizar la contraseña"))
+                }
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.OK, SecurityActionResponse(false, "Error al cambiar contraseña"))
+            }
         }
     }
 }
