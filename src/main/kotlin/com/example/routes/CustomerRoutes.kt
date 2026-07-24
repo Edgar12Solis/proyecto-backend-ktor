@@ -132,21 +132,39 @@ fun Route.customerRoutes() {
             }
         }
 
-        // 4. Subir Foto de Perfil
+        // 4. Subir Foto de Perfil (Con URL Absoluta para que se vea de verdad)
         post("/customer/profile/photo") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
             
             try {
+                // Recibimos los bytes de la imagen directamente
                 val bytes = call.receive<ByteArray>()
+                if (bytes.isEmpty()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("success" to false, "message" to "No se recibieron datos de imagen"))
+                    return@post
+                }
+
+                // Generar nombre de archivo único
                 val fileName = "profile_${System.currentTimeMillis()}.jpg"
-                val file = java.io.File("uploads/$fileName")
+                val uploadDir = java.io.File("uploads/profiles")
+                if (!uploadDir.exists()) uploadDir.mkdirs()
                 
-                // Asegurar que existe la carpeta
-                file.parentFile.mkdirs()
+                val file = java.io.File(uploadDir, fileName)
                 file.writeBytes(bytes)
 
-                val publicUrl = "/uploads/$fileName"
+                // IMPORTANTE: Construir la URL completa (Absoluta)
+                // Esto permite que la App móvil pueda cargar la foto desde Internet
+                val host = call.request.local.serverHost
+                val port = call.request.local.serverPort
+                val scheme = call.request.local.scheme
+                
+                // Si estamos en producción (Railway), el puerto no suele ir en la URL
+                val publicUrl = if (host.contains("localhost")) {
+                    "$scheme://$host:$port/uploads/profiles/$fileName"
+                } else {
+                    "$scheme://$host/uploads/profiles/$fileName"
+                }
 
                 transaction {
                     UsuariosTable.update({ UsuariosTable.email eq email }) {
@@ -154,10 +172,15 @@ fun Route.customerRoutes() {
                     }
                 }
 
-                call.respond(HttpStatusCode.OK, mapOf("success" to true, "message" to "Foto actualizada con éxito", "imageUrl" to publicUrl))
+                println("✅ Foto guardada de verdad: $publicUrl")
+                call.respond(HttpStatusCode.OK, mapOf(
+                    "success" to true, 
+                    "message" to "Foto actualizada con éxito", 
+                    "imageUrl" to publicUrl
+                ))
             } catch (e: Exception) {
-                println("❌ Error subiendo foto: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, mapOf("success" to false, "message" to "Error al guardar la imagen"))
+                println("❌ Error crítico al guardar foto: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, mapOf("success" to false, "message" to "Error al guardar la imagen en el servidor"))
             }
         }
     }
