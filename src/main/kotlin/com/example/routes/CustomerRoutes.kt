@@ -10,6 +10,9 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.http.content.*
+import io.ktor.utils.io.*
+import kotlinx.io.readByteArray
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 
@@ -132,38 +135,46 @@ fun Route.customerRoutes() {
             }
         }
 
-        // 4. Subir Foto de Perfil (Con URL Absoluta para que se vea de verdad)
+        // 4. Subir Foto de Perfil (Vía MULTIPART - La forma más estable)
         post("/customer/profile/photo") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
             
             try {
-                // Recibimos los bytes de la imagen directamente
-                val bytes = call.receive<ByteArray>()
-                if (bytes.isEmpty()) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("success" to false, "message" to "No se recibieron datos de imagen"))
+                val multipart = call.receiveMultipart()
+                var fileName = ""
+                var fileBytes: ByteArray? = null
+
+                multipart.forEachPart { part ->
+                    if (part is PartData.FileItem && part.name == "image") {
+                        fileBytes = part.provider().readRemaining().readByteArray()
+                        val extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
+                        fileName = "profile_${System.currentTimeMillis()}.$extension"
+                    }
+                    part.dispose()
+                }
+
+                if (fileBytes == null || fileBytes!!.isEmpty()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("success" to false, "message" to "No se recibió ninguna imagen con el nombre 'image'"))
                     return@post
                 }
 
-                // Generar nombre de archivo único
-                val fileName = "profile_${System.currentTimeMillis()}.jpg"
+                // Guardar archivo
                 val uploadDir = java.io.File("uploads/profiles")
                 if (!uploadDir.exists()) uploadDir.mkdirs()
-                
                 val file = java.io.File(uploadDir, fileName)
-                file.writeBytes(bytes)
+                file.writeBytes(fileBytes!!)
 
-                // IMPORTANTE: Construir la URL completa (Absoluta)
-                // Esto permite que la App móvil pueda cargar la foto desde Internet
+                // Generar URL Absoluta
                 val host = call.request.local.serverHost
                 val port = call.request.local.serverPort
                 val scheme = call.request.local.scheme
                 
-                // Si estamos en producción (Railway), el puerto no suele ir en la URL
                 val publicUrl = if (host.contains("localhost")) {
                     "$scheme://$host:$port/uploads/profiles/$fileName"
                 } else {
-                    "$scheme://$host/uploads/profiles/$fileName"
+                    // En Railway usualmente usamos https y el host oficial
+                    "https://proyecto-backend-ktor-production.up.railway.app/uploads/profiles/$fileName"
                 }
 
                 transaction {
@@ -172,15 +183,15 @@ fun Route.customerRoutes() {
                     }
                 }
 
-                println("✅ Foto guardada de verdad: $publicUrl")
                 call.respond(HttpStatusCode.OK, mapOf(
                     "success" to true, 
-                    "message" to "Foto actualizada con éxito", 
+                    "message" to "Foto actualizada", 
                     "imageUrl" to publicUrl
                 ))
+
             } catch (e: Exception) {
-                println("❌ Error crítico al guardar foto: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, mapOf("success" to false, "message" to "Error al guardar la imagen en el servidor"))
+                println("❌ Error en subida Multipart: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, mapOf("success" to false, "message" to "Error al procesar la imagen"))
             }
         }
     }
