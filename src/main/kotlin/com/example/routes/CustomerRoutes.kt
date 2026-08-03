@@ -135,10 +135,12 @@ fun Route.customerRoutes() {
             }
         }
 
-        // 4. Subir Foto de Perfil (Vía MULTIPART - La forma más estable)
+        // 4. Subir Foto de Perfil (Multipart - Versión Robusta con Logs)
         post("/customer/profile/photo") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
+            
+            println("📸 Iniciando subida de foto para: $email")
             
             try {
                 val multipart = call.receiveMultipart()
@@ -146,52 +148,53 @@ fun Route.customerRoutes() {
                 var fileBytes: ByteArray? = null
 
                 multipart.forEachPart { part ->
+                    println("📦 Procesando parte: ${part.name}")
                     if (part is PartData.FileItem && part.name == "image") {
                         fileBytes = part.provider().readRemaining().readByteArray()
                         val extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
                         fileName = "profile_${System.currentTimeMillis()}.$extension"
+                        println("📄 Archivo detectado: $fileName (${fileBytes?.size} bytes)")
                     }
                     part.dispose()
                 }
 
                 if (fileBytes == null || fileBytes!!.isEmpty()) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("success" to false, "message" to "No se recibió ninguna imagen con el nombre 'image'"))
+                    println("❌ Error: No se recibió ningún archivo en la parte 'image'")
+                    call.respond(HttpStatusCode.OK, UpdateProfileResponse(false, "No se seleccionó ninguna imagen"))
                     return@post
                 }
 
-                // Guardar archivo
+                // Guardar archivo físicamente
                 val uploadDir = java.io.File("uploads/profiles")
-                if (!uploadDir.exists()) uploadDir.mkdirs()
+                if (!uploadDir.exists()) {
+                    val created = uploadDir.mkdirs()
+                    println("📂 Creando directorio de subidas: $created")
+                }
+                
                 val file = java.io.File(uploadDir, fileName)
                 file.writeBytes(fileBytes!!)
+                println("💾 Archivo guardado físicamente en: ${file.absolutePath}")
 
-                // Generar URL Absoluta
-                val host = call.request.local.serverHost
-                val port = call.request.local.serverPort
-                val scheme = call.request.local.scheme
-                
-                val publicUrl = if (host.contains("localhost")) {
-                    "$scheme://$host:$port/uploads/profiles/$fileName"
-                } else {
-                    // En Railway usualmente usamos https y el host oficial
-                    "https://proyecto-backend-ktor-production.up.railway.app/uploads/profiles/$fileName"
-                }
+                // Generar URL para el Frontend
+                val publicUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/profiles/$fileName"
 
                 transaction {
                     UsuariosTable.update({ UsuariosTable.email eq email }) {
-                        it[imagenUrl] = publicUrl
+                        it[UsuariosTable.imagenUrl] = publicUrl
                     }
                 }
 
+                println("✅ Base de datos actualizada con: $publicUrl")
                 call.respond(HttpStatusCode.OK, mapOf(
                     "success" to true, 
-                    "message" to "Foto actualizada", 
+                    "message" to "Foto de perfil actualizada correctamente", 
                     "imageUrl" to publicUrl
                 ))
 
             } catch (e: Exception) {
-                println("❌ Error en subida Multipart: ${e.message}")
-                call.respond(HttpStatusCode.InternalServerError, mapOf("success" to false, "message" to "Error al procesar la imagen"))
+                println("❌ ERROR CRÍTICO en subida de foto: ${e.message}")
+                e.printStackTrace()
+                call.respond(HttpStatusCode.OK, UpdateProfileResponse(false, "Error técnico al guardar la foto"))
             }
         }
     }
