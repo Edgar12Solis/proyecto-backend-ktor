@@ -69,7 +69,8 @@ fun Route.customerRoutes() {
                                 email = row[UsuariosTable.email],
                                 telefono = row[PerfilesClientesTable.telefono],
                                 fechaNacimiento = row[PerfilesClientesTable.fechaNacimiento],
-                                direccion = row[PerfilesClientesTable.direccion]
+                                direccion = row[PerfilesClientesTable.direccion],
+                                imagenUrl = row[UsuariosTable.imagenUrl]
                             )
                         }.singleOrNull()
                 }

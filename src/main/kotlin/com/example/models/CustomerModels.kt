@@ -24,7 +24,8 @@ data class UserProfileResponse(
     val email: String,
     val telefono: String,
     val fechaNacimiento: String?,
-    val direccion: String?
+    val direccion: String?,
+    val imagenUrl: String? = null
 )
 
 @Serializable
