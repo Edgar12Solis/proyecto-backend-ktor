@@ -1,20 +1,21 @@
 package com.example.models
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 @Serializable
 data class AppointmentDTO(
-    val serviceName: String,
+    @SerialName("service_name") val serviceName: String,
     val date: String,
     val time: String,
-    val totalPrice: Double,
+    @SerialName("total_price") val totalPrice: Double,
     val status: String
 )
 
 @Serializable
 data class DashboardDataResponse(
-    val customerName: String,
-    val recentAppointments: List<AppointmentDTO>
+    @SerialName("customer_name") val customerName: String,
+    @SerialName("recent_appointments") val recentAppointments: List<AppointmentDTO>
 )
 
 @Serializable
@@ -23,9 +24,9 @@ data class UserProfileResponse(
     val apellidos: String,
     val email: String,
     val telefono: String,
-    val fechaNacimiento: String?,
+    @SerialName("fecha_nacimiento") val fechaNacimiento: String?,
     val direccion: String?,
-    val imagenUrl: String? = null
+    @SerialName("imagen_url") val imagenUrl: String? = null
 )
 
 @Serializable
@@ -33,7 +34,7 @@ data class UpdateProfileRequest(
     val nombres: String,
     val apellidos: String,
     val telefono: String,
-    val fechaNacimiento: String?,
+    @SerialName("fecha_nacimiento") val fechaNacimiento: String?,
     val direccion: String?,
     val password: String? = null
 )
@@ -42,4 +43,12 @@ data class UpdateProfileRequest(
 data class UpdateProfileResponse(
     val success: Boolean,
     val message: String
+)
+
+@Serializable
+data class BookingRequest(
+    @SerialName("barber_id") val barberId: Int,
+    @SerialName("service_id") val serviceId: Int,
+    val date: String,
+    @SerialName("start_time") val startTime: String
 )

@@ -13,6 +13,7 @@ import io.ktor.server.routing.*
 import io.ktor.http.content.*
 import io.ktor.utils.io.*
 import kotlinx.io.readByteArray
+import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 
@@ -58,7 +59,6 @@ fun Route.customerRoutes() {
             
             try {
                 val profile = transaction {
-                    // Cruce de tablas (Join) entre usuarios y perfiles_clientes
                     (UsuariosTable innerJoin PerfilesClientesTable)
                         .selectAll()
                         .where { UsuariosTable.email eq email }
@@ -93,7 +93,6 @@ fun Route.customerRoutes() {
             try {
                 val req = call.receive<UpdateProfileRequest>()
                 
-                // Validación básica
                 if (req.nombres.isBlank() || req.apellidos.isBlank() || req.telefono.isBlank()) {
                     call.respond(
                         HttpStatusCode.OK, 
@@ -106,7 +105,6 @@ fun Route.customerRoutes() {
                     val user = UsuariosTable.selectAll().where { UsuariosTable.email eq email }.single()
                     val userId = user[UsuariosTable.id]
                     
-                    // 1. Actualizar Usuario
                     UsuariosTable.update({ UsuariosTable.id eq userId }) {
                         it[UsuariosTable.nombre] = "${req.nombres} ${req.apellidos}"
                         if (!req.password.isNullOrBlank()) {
@@ -114,7 +112,6 @@ fun Route.customerRoutes() {
                         }
                     }
                     
-                    // 2. Actualizar Perfil
                     PerfilesClientesTable.update({ PerfilesClientesTable.usuarioId eq userId }) {
                         it[PerfilesClientesTable.nombres] = req.nombres
                         it[PerfilesClientesTable.apellidos] = req.apellidos
@@ -128,7 +125,7 @@ fun Route.customerRoutes() {
                     UpdateProfileResponse(success = true, message = "Perfil actualizado correctamente")
                 )
             } catch (e: Exception) {
-                println("Error al actualizar perfil: ${e.message}")
+                println("❌ Error al actualizar perfil: ${e.message}")
                 call.respond(
                     HttpStatusCode.OK, 
                     UpdateProfileResponse(success = false, message = "Error al actualizar el perfil")
@@ -136,12 +133,9 @@ fun Route.customerRoutes() {
             }
         }
 
-        // 4. Subir Foto de Perfil (Multipart - Versión Robusta con Logs)
         post("/customer/profile/photo") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
-            
-            println("📸 Iniciando subida de foto para: $email")
             
             try {
                 val multipart = call.receiveMultipart()
@@ -149,34 +143,25 @@ fun Route.customerRoutes() {
                 var fileBytes: ByteArray? = null
 
                 multipart.forEachPart { part ->
-                    println("📦 Procesando parte: ${part.name}")
                     if (part is PartData.FileItem && part.name == "image") {
                         fileBytes = part.provider().readRemaining().readByteArray()
                         val extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
                         fileName = "profile_${System.currentTimeMillis()}.$extension"
-                        println("📄 Archivo detectado: $fileName (${fileBytes?.size} bytes)")
                     }
                     part.dispose()
                 }
 
                 if (fileBytes == null || fileBytes!!.isEmpty()) {
-                    println("❌ Error: No se recibió ningún archivo en la parte 'image'")
                     call.respond(HttpStatusCode.OK, UpdateProfileResponse(false, "No se seleccionó ninguna imagen"))
                     return@post
                 }
 
-                // Guardar archivo físicamente
                 val uploadDir = java.io.File("uploads/profiles")
-                if (!uploadDir.exists()) {
-                    val created = uploadDir.mkdirs()
-                    println("📂 Creando directorio de subidas: $created")
-                }
+                if (!uploadDir.exists()) uploadDir.mkdirs()
                 
                 val file = java.io.File(uploadDir, fileName)
                 file.writeBytes(fileBytes!!)
-                println("💾 Archivo guardado físicamente en: ${file.absolutePath}")
 
-                // Generar URL para el Frontend
                 val publicUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/profiles/$fileName"
 
                 transaction {
@@ -185,7 +170,6 @@ fun Route.customerRoutes() {
                     }
                 }
 
-                println("✅ Base de datos actualizada con: $publicUrl")
                 call.respond(HttpStatusCode.OK, mapOf(
                     "success" to true, 
                     "message" to "Foto de perfil actualizada correctamente", 
@@ -193,9 +177,39 @@ fun Route.customerRoutes() {
                 ))
 
             } catch (e: Exception) {
-                println("❌ ERROR CRÍTICO en subida de foto: ${e.message}")
-                e.printStackTrace()
                 call.respond(HttpStatusCode.OK, UpdateProfileResponse(false, "Error técnico al guardar la foto"))
+            }
+        }
+
+        // 5. Agendar Cita (NUEVO)
+        post("/client/booking") {
+            val principal = call.principal<JWTPrincipal>()
+            val email = principal?.payload?.getClaim("email")?.asString() ?: ""
+
+            try {
+                val req = call.receive<BookingRequest>()
+                
+                transaction {
+                    val user = UsuariosTable.selectAll().where { UsuariosTable.email eq email }.single()
+                    val userId = user[UsuariosTable.id]
+                    
+                    val service = ServiciosTable.selectAll().where { ServiciosTable.id eq req.serviceId }.single()
+                    val price = service[ServiciosTable.precio]
+
+                    CitasTable.insert {
+                        it[usuarioId] = userId
+                        it[barberoId] = EntityID(req.barberId, UsuariosTable)
+                        it[serviceName] = service[ServiciosTable.nombre]
+                        it[date] = req.date
+                        it[startTime] = req.startTime
+                        it[totalPrice] = price
+                        it[status] = "pending"
+                    }
+                }
+                call.respond(HttpStatusCode.Created, mapOf("success" to true, "message" to "Cita agendada correctamente"))
+            } catch (e: Exception) {
+                println("❌ Error booking: ${e.message}")
+                call.respond(HttpStatusCode.BadRequest, mapOf("success" to false, "message" to "Error al agendar cita"))
             }
         }
     }

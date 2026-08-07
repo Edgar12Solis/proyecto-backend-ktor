@@ -1,6 +1,7 @@
 package com.example.models
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 @Serializable
 data class AdminCustomerInfo(
@@ -16,7 +17,7 @@ data class AdminServiceInfo(
 
 @Serializable
 data class AdminBarberInfo(
-    val nombreCompleto: String
+    @SerialName("nombre_completo") val nombreCompleto: String
 )
 
 @Serializable
@@ -24,7 +25,7 @@ data class AdminAppointmentResponse(
     val id: Int,
     val customer: AdminCustomerInfo,
     val date: String,
-    val startTime: String,
+    @SerialName("start_time") val startTime: String,
     val status: String,
     val service: AdminServiceInfo,
     val barber: AdminBarberInfo
