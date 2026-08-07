@@ -1,12 +1,13 @@
 package com.example.models
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 @Serializable
 data class BarberoCreateRequest(
+    @SerialName("nombre_completo") val nombreCompleto: String,
     val email: String,
     val password: String,
-    val nombreCompleto: String,
     val especialidad: String,
     val biografia: String
 )

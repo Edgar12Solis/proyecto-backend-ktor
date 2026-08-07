@@ -87,7 +87,7 @@ fun Route.adminRoutes() {
             }
         }
 
-        // 3. Obtener Citas con filtrado por rol
+        // 3. Obtener Citas con filtrado por rol (Admin o Barbero)
         get("/admin/appointments") {
             val dateParam = call.request.queryParameters["date"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Falta date")
             val principal = call.principal<JWTPrincipal>()
@@ -109,7 +109,7 @@ fun Route.adminRoutes() {
                         .selectAll()
                         .where { CitasTable.date eq dateParam }
 
-                    // Filtrado crítico para Barberos
+                    // Filtrado para Barberos (solo ven sus propias citas)
                     if (userRole == "BARBERO") {
                         query = query.andWhere { CitasTable.barberoId eq userId }
                     }
@@ -118,7 +118,8 @@ fun Route.adminRoutes() {
                         AdminAppointmentResponse(
                             id = row[CitasTable.id].value,
                             customer = AdminCustomerInfo(
-                                nombre = row[clienteAlias[UsuariosTable.nombre]],
+                                nombre = row.getOrNull(PerfilesClientesTable.nombres) ?: row[clienteAlias[UsuariosTable.nombre]],
+                                apellido = row.getOrNull(PerfilesClientesTable.apellidos) ?: "",
                                 telefono = row.getOrNull(PerfilesClientesTable.telefono) ?: ""
                             ),
                             date = row[CitasTable.date],
@@ -136,11 +137,12 @@ fun Route.adminRoutes() {
                 }
                 call.respond(appointments)
             } catch (e: Exception) {
+                println("Error appointments: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, "Error")
             }
         }
 
-        // 4. Actualizar Estado de Cita (confirmar, completar, cancelar)
+        // 4. Actualizar Estado de Cita
         post("/admin/appointments/{id}/status") {
             val id = call.parameters["id"]?.toIntOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, "ID inválido")
             val req = call.receive<Map<String, String>>()

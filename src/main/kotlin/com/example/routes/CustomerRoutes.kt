@@ -53,6 +53,7 @@ fun Route.customerRoutes() {
             }
         }
         
+        // 1. Obtener Perfil (Alineado con snake_case)
         get("/customer/profile") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
@@ -75,17 +76,14 @@ fun Route.customerRoutes() {
                         }.singleOrNull()
                 }
 
-                if (profile != null) {
-                    call.respond(profile)
-                } else {
-                    call.respond(HttpStatusCode.NotFound, mapOf("mensaje" to "Perfil no encontrado"))
-                }
+                if (profile != null) call.respond(profile)
+                else call.respond(HttpStatusCode.NotFound, mapOf("mensaje" to "Perfil no encontrado"))
             } catch (e: Exception) {
-                println("Error profile: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, "Error al obtener perfil")
             }
         }
         
+        // 2. Actualizar Perfil
         put("/customer/profile/update") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
@@ -94,10 +92,7 @@ fun Route.customerRoutes() {
                 val req = call.receive<UpdateProfileRequest>()
                 
                 if (req.nombres.isBlank() || req.apellidos.isBlank() || req.telefono.isBlank()) {
-                    call.respond(
-                        HttpStatusCode.OK, 
-                        UpdateProfileResponse(success = false, message = "Nombres, apellidos y teléfono son obligatorios")
-                    )
+                    call.respond(HttpStatusCode.OK, UpdateProfileResponse(false, "Campos obligatorios vacíos"))
                     return@put
                 }
 
@@ -107,9 +102,7 @@ fun Route.customerRoutes() {
                     
                     UsuariosTable.update({ UsuariosTable.id eq userId }) {
                         it[UsuariosTable.nombre] = "${req.nombres} ${req.apellidos}"
-                        if (!req.password.isNullOrBlank()) {
-                            it[UsuariosTable.password] = PasswordHasher.hash(req.password)
-                        }
+                        if (!req.password.isNullOrBlank()) it[UsuariosTable.password] = PasswordHasher.hash(req.password)
                     }
                     
                     PerfilesClientesTable.update({ PerfilesClientesTable.usuarioId eq userId }) {
@@ -120,27 +113,21 @@ fun Route.customerRoutes() {
                         it[PerfilesClientesTable.direccion] = req.direccion
                     }
                 }
-                call.respond(
-                    HttpStatusCode.OK, 
-                    UpdateProfileResponse(success = true, message = "Perfil actualizado correctamente")
-                )
+                call.respond(HttpStatusCode.OK, UpdateProfileResponse(true, "Perfil actualizado correctamente"))
             } catch (e: Exception) {
-                println("❌ Error al actualizar perfil: ${e.message}")
-                call.respond(
-                    HttpStatusCode.OK, 
-                    UpdateProfileResponse(success = false, message = "Error al actualizar el perfil")
-                )
+                call.respond(HttpStatusCode.OK, UpdateProfileResponse(false, "Error al actualizar perfil"))
             }
         }
 
+        // 3. Subir Foto (Multipart campo: "image")
         post("/customer/profile/photo") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
             
             try {
                 val multipart = call.receiveMultipart()
-                var fileName = ""
                 var fileBytes: ByteArray? = null
+                var fileName = ""
 
                 multipart.forEachPart { part ->
                     if (part is PartData.FileItem && part.name == "image") {
@@ -151,50 +138,37 @@ fun Route.customerRoutes() {
                     part.dispose()
                 }
 
-                if (fileBytes == null || fileBytes!!.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, UpdateProfileResponse(false, "No se seleccionó ninguna imagen"))
-                    return@post
-                }
+                if (fileBytes != null) {
+                    val uploadDir = java.io.File("uploads")
+                    if (!uploadDir.exists()) uploadDir.mkdirs()
+                    java.io.File(uploadDir, fileName).writeBytes(fileBytes!!)
 
-                val uploadDir = java.io.File("uploads/profiles")
-                if (!uploadDir.exists()) uploadDir.mkdirs()
-                
-                val file = java.io.File(uploadDir, fileName)
-                file.writeBytes(fileBytes!!)
-
-                val publicUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/profiles/$fileName"
-
-                transaction {
-                    UsuariosTable.update({ UsuariosTable.email eq email }) {
-                        it[UsuariosTable.imagenUrl] = publicUrl
+                    val publicUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/$fileName"
+                    transaction {
+                        UsuariosTable.update({ UsuariosTable.email eq email }) {
+                            it[UsuariosTable.imagenUrl] = publicUrl
+                        }
                     }
+                    call.respond(HttpStatusCode.OK, mapOf("success" to true, "imageUrl" to publicUrl))
+                } else {
+                    call.respond(HttpStatusCode.OK, mapOf("success" to false, "message" to "No se recibió imagen"))
                 }
-
-                call.respond(HttpStatusCode.OK, mapOf(
-                    "success" to true, 
-                    "message" to "Foto de perfil actualizada correctamente", 
-                    "imageUrl" to publicUrl
-                ))
-
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.OK, UpdateProfileResponse(false, "Error técnico al guardar la foto"))
+                call.respond(HttpStatusCode.OK, mapOf("success" to false, "message" to "Error al subir foto"))
             }
         }
 
-        // 5. Agendar Cita (NUEVO)
+        // 4. Agendar Cita (Cliente)
         post("/client/booking") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
 
             try {
                 val req = call.receive<BookingRequest>()
-                
                 transaction {
                     val user = UsuariosTable.selectAll().where { UsuariosTable.email eq email }.single()
                     val userId = user[UsuariosTable.id]
-                    
                     val service = ServiciosTable.selectAll().where { ServiciosTable.id eq req.serviceId }.single()
-                    val price = service[ServiciosTable.precio]
 
                     CitasTable.insert {
                         it[usuarioId] = userId
@@ -202,14 +176,46 @@ fun Route.customerRoutes() {
                         it[serviceName] = service[ServiciosTable.nombre]
                         it[date] = req.date
                         it[startTime] = req.startTime
-                        it[totalPrice] = price
+                        it[totalPrice] = service[ServiciosTable.precio]
                         it[status] = "pending"
                     }
                 }
-                call.respond(HttpStatusCode.Created, mapOf("success" to true, "message" to "Cita agendada correctamente"))
+                call.respond(HttpStatusCode.Created, mapOf("success" to true, "message" to "Cita agendada"))
             } catch (e: Exception) {
-                println("❌ Error booking: ${e.message}")
-                call.respond(HttpStatusCode.BadRequest, mapOf("success" to false, "message" to "Error al agendar cita"))
+                call.respond(HttpStatusCode.BadRequest, mapOf("success" to false, "message" to "Error al agendar"))
+            }
+        }
+
+        // 5. Mis Citas (Lista Completa del Cliente)
+        get("/client/appointments") {
+            val principal = call.principal<JWTPrincipal>()
+            val email = principal?.payload?.getClaim("email")?.asString() ?: ""
+
+            try {
+                val appointments = transaction {
+                    val user = UsuariosTable.selectAll().where { UsuariosTable.email eq email }.single()
+                    val userId = user[UsuariosTable.id]
+                    val barberoAlias = UsuariosTable.alias("barbero")
+
+                    (CitasTable innerJoin barberoAlias)
+                        .selectAll()
+                        .where { CitasTable.usuarioId eq userId }
+                        .orderBy(CitasTable.date to SortOrder.DESC)
+                        .map { row ->
+                            ClientAppointmentResponse(
+                                id = row[CitasTable.id].value,
+                                date = row[CitasTable.date],
+                                startTime = row[CitasTable.startTime],
+                                status = row[CitasTable.status],
+                                serviceName = row[CitasTable.serviceName],
+                                totalPrice = row[CitasTable.totalPrice],
+                                barberName = row[barberoAlias[UsuariosTable.nombre]]
+                            )
+                        }
+                }
+                call.respond(appointments)
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, "Error al obtener citas")
             }
         }
     }
