@@ -15,7 +15,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 fun Route.inventoryRoutes() {
     authenticate("auth-jwt") {
 
-        // 1. Listar Productos con su Categoría
+        // 1. Listar Productos
         get("/admin/products") {
             try {
                 val products = transaction {
@@ -44,52 +44,25 @@ fun Route.inventoryRoutes() {
             }
         }
 
-        // 2. Estadísticas de Inventario
-        get("/admin/inventory/stats") {
+        // 2. Crear Categoría de Producto (NUEVO)
+        post("/admin/product-categories") {
             try {
-                val stats = transaction {
-                    val total = ProductosTable.selectAll().count().toInt()
-                    val lowStock = ProductosTable.selectAll().where { ProductosTable.stock less 5 }.count().toInt()
-                    val value = ProductosTable.selectAll().sumOf { it[ProductosTable.precio] * it[ProductosTable.stock] }
-                    
-                    InventoryStats(total, lowStock, value)
+                val req = call.receive<ProductCategoryDTO>()
+                transaction {
+                    CategoriasProductosTable.insert {
+                        it[nombre] = req.nombre
+                    }
                 }
-                call.respond(stats)
+                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Categoría de producto creada"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, "Error al obtener estadísticas")
+                call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Error al crear categoría"))
             }
         }
 
-        // 3. Acción Rápida: Reducir Stock (-1)
-        post("/admin/products/{id}/reduce-stock") {
-            val id = call.parameters["id"]?.toIntOrNull()
-            if (id == null) {
-                call.respond(HttpStatusCode.BadRequest, "ID inválido")
-                return@post
-            }
-
-            try {
-                val newStock = transaction {
-                    val currentStock = ProductosTable.selectAll().where { ProductosTable.id eq id }
-                        .single()[ProductosTable.stock]
-                    
-                    if (currentStock > 0) {
-                        ProductosTable.update({ ProductosTable.id eq id }) {
-                            it.update(ProductosTable.stock, ProductosTable.stock minus 1)
-                        }
-                        currentStock - 1
-                    } else currentStock
-                }
-                call.respond(ReduceStockResponse(true, "Stock actualizado", newStock))
-            } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, ReduceStockResponse(false, "Error al actualizar stock"))
-            }
-        }
-
-        // 4. Crear Producto
+        // 3. Crear Producto (Alineado con DTO)
         post("/admin/products") {
             try {
-                val req = call.receive<ProductDTO>() // Usamos DTO para simplificar
+                val req = call.receive<ProductDTO>()
                 transaction {
                     ProductosTable.insert {
                         it[nombre] = req.nombre
@@ -98,7 +71,7 @@ fun Route.inventoryRoutes() {
                         it[sku] = req.sku
                         it[imagenUrl] = req.imagenUrl
                         it[activo] = req.activo
-                        it[categoriaId] = req.category.id
+                        it[categoriaId] = req.category.id!!
                         it[descripcion] = req.descripcion
                     }
                 }
@@ -108,7 +81,7 @@ fun Route.inventoryRoutes() {
             }
         }
 
-        // 5. Editar Producto
+        // 4. Editar Producto
         put("/admin/products/{id}") {
             val id = call.parameters["id"]?.toIntOrNull()
             if (id == null) {
@@ -125,13 +98,44 @@ fun Route.inventoryRoutes() {
                         it[sku] = req.sku
                         it[imagenUrl] = req.imagenUrl
                         it[activo] = req.activo
-                        it[categoriaId] = req.category.id
+                        it[categoriaId] = req.category.id!!
                         it[descripcion] = req.descripcion
                     }
                 }
                 call.respond(AdminActionResponse(true, "Producto actualizado"))
             } catch (e: Exception) {
                 call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Error: ${e.message}"))
+            }
+        }
+
+        // 5. Estadísticas y Reducción de Stock (Mantenidas)
+        get("/admin/inventory/stats") {
+            try {
+                val stats = transaction {
+                    val total = ProductosTable.selectAll().count().toInt()
+                    val lowStock = ProductosTable.selectAll().where { ProductosTable.stock less 5 }.count().toInt()
+                    val value = ProductosTable.selectAll().sumOf { it[ProductosTable.precio] * it[ProductosTable.stock] }
+                    InventoryStats(total, lowStock, value)
+                }
+                call.respond(stats)
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, "Error")
+            }
+        }
+
+        post("/admin/products/{id}/reduce-stock") {
+            val id = call.parameters["id"]?.toIntOrNull()
+            if (id != null) {
+                val newStock = transaction {
+                    val current = ProductosTable.selectAll().where { ProductosTable.id eq id }.single()[ProductosTable.stock]
+                    if (current > 0) {
+                        ProductosTable.update({ ProductosTable.id eq id }) {
+                            it.update(ProductosTable.stock, ProductosTable.stock minus 1)
+                        }
+                        current - 1
+                    } else current
+                }
+                call.respond(ReduceStockResponse(true, "Stock reducido", newStock))
             }
         }
     }

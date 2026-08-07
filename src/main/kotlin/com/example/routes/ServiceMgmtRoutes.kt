@@ -15,7 +15,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 fun Route.serviceMgmtRoutes() {
     authenticate("auth-jwt") {
 
-        // 1. Servicios y Categorías
+        // 1. Categorías de Servicios
         get("/admin/service-categories") {
             try {
                 val categories = transaction {
@@ -29,6 +29,21 @@ fun Route.serviceMgmtRoutes() {
             }
         }
 
+        post("/admin/service-categories") {
+            try {
+                val req = call.receive<ServiceCategoryDTO>()
+                transaction {
+                    CategoriasServiciosTable.insert {
+                        it[nombre] = req.nombre
+                    }
+                }
+                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Categoría de servicio creada"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Error: ${e.message}"))
+            }
+        }
+
+        // 2. Servicios
         get("/admin/services") {
             try {
                 val services = transaction {
@@ -73,7 +88,7 @@ fun Route.serviceMgmtRoutes() {
             }
         }
 
-        // 2. Promociones
+        // 3. Promociones
         get("/admin/promotions") {
             try {
                 val promos = transaction {
@@ -125,20 +140,18 @@ fun Route.serviceMgmtRoutes() {
 
         post("/admin/promotions/{id}/toggle") {
             val id = call.parameters["id"]?.toIntOrNull()
-            if (id == null) {
-                call.respond(HttpStatusCode.BadRequest, "ID inválido")
-                return@post
-            }
-            try {
-                transaction {
-                    val current = PromocionesTable.selectAll().where { PromocionesTable.id eq id }.single()[PromocionesTable.activo]
-                    PromocionesTable.update({ PromocionesTable.id eq id }) {
-                        it[activo] = !current
+            if (id != null) {
+                try {
+                    transaction {
+                        val current = PromocionesTable.selectAll().where { PromocionesTable.id eq id }.single()[PromocionesTable.activo]
+                        PromocionesTable.update({ PromocionesTable.id eq id }) {
+                            it[activo] = !current
+                        }
                     }
+                    call.respond(AdminActionResponse(true, "Estado cambiado"))
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.InternalServerError, "Error")
                 }
-                call.respond(AdminActionResponse(true, "Estado de promoción cambiado"))
-            } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, "Error")
             }
         }
 

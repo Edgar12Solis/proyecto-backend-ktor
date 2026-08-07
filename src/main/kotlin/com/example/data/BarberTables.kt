@@ -9,6 +9,13 @@ object HorariosBarberosTable : IntIdTable("horarios_barberos") {
     val config = text("config") // Formato: "1-10:00,1-11:00..."
 }
 
+object PerfilesBarberosTable : IntIdTable("perfiles_barberos") {
+    val usuarioId = reference("usuario_id", UsuariosTable, onDelete = ReferenceOption.CASCADE)
+    val telefono = varchar("telefono", 20).nullable()
+    val especialidad = varchar("especialidad", 100)
+    val biografia = text("biografia")
+}
+
 object BarberoEspecialidadesTable : Table("barbero_especialidades") {
     val usuarioId = reference("usuario_id", UsuariosTable, onDelete = ReferenceOption.CASCADE)
     val categoriaId = reference("categoria_id", CategoriasServiciosTable, onDelete = ReferenceOption.CASCADE)

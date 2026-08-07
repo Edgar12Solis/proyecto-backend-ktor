@@ -15,11 +15,13 @@ data class BarberScheduleRequest(
 
 @Serializable
 data class BarberCreateRequest(
+    val id: Int? = null,
     val nombreCompleto: String,
-    val email: String,
     val telefono: String,
-    val bio: String,
+    val email: String,
+    val imagenUrl: String? = null,
     val activo: Boolean,
+    val bio: String,
     val scheduleConfiguration: String,
     val specialties: List<String> // Nombres de categorías
 )

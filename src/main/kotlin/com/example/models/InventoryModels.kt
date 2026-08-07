@@ -4,13 +4,13 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ProductCategoryDTO(
-    val id: Int,
+    val id: Int? = null,
     val nombre: String
 )
 
 @Serializable
 data class ProductDTO(
-    val id: Int,
+    val id: Int? = null,
     val nombre: String,
     val precio: Double,
     val stock: Int,

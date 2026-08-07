@@ -47,8 +47,12 @@ data class UpdateProfileResponse(
 
 @Serializable
 data class BookingRequest(
-    @SerialName("barber_id") val barberId: Int,
-    @SerialName("service_id") val serviceId: Int,
-    val date: String,
-    @SerialName("start_time") val startTime: String
+    val barberId: Int,
+    val paymentMethod: String,
+    val cartItems: List<CartItem>,
+    val amountReceived: Double,
+    val ghostName: String? = null,
+    // Agregamos fecha y hora si el front los manda fuera del carrito o dentro de los items
+    val date: String? = null,
+    val startTime: String? = null
 )

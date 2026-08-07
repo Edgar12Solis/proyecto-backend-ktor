@@ -16,7 +16,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 fun Route.barberMgmtRoutes() {
     authenticate("auth-jwt") {
 
-        // 1. Listar Barberos con Especialidades y Horario
+        // 1. Listar Barberos
         get("/admin/barbers") {
             try {
                 val barbers = transaction {
@@ -26,7 +26,6 @@ fun Route.barberMgmtRoutes() {
                         .map { row ->
                             val bId = row[UsuariosTable.id].value
                             
-                            // Obtener nombres de especialidades uniendo con CategoriasServiciosTable
                             val specs = (BarberoEspecialidadesTable innerJoin CategoriasServiciosTable)
                                 .selectAll()
                                 .where { BarberoEspecialidadesTable.usuarioId eq bId }
@@ -36,7 +35,7 @@ fun Route.barberMgmtRoutes() {
                                 id = bId,
                                 nombreCompleto = row[UsuariosTable.nombre],
                                 email = row[UsuariosTable.email],
-                                telefono = "", // Podría agregarse una tabla de perfil si es necesario
+                                telefono = row.getOrNull(PerfilesBarberosTable.telefono) ?: "",
                                 bio = row[UsuariosTable.bio] ?: "",
                                 activo = row[UsuariosTable.activo],
                                 scheduleConfiguration = row[UsuariosTable.scheduleConfig] ?: "",
@@ -46,12 +45,11 @@ fun Route.barberMgmtRoutes() {
                 }
                 call.respond(barbers)
             } catch (e: Exception) {
-                println("❌ Error listing barbers: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, "Error al listar barberos")
             }
         }
 
-        // 2. Crear Nuevo Barbero
+        // 2. Crear Barbero (Alineado con DTO)
         post("/admin/barbers") {
             try {
                 val req = call.receive<BarberCreateRequest>()
@@ -59,11 +57,20 @@ fun Route.barberMgmtRoutes() {
                     val userId = UsuariosTable.insertAndGetId {
                         it[nombre] = req.nombreCompleto
                         it[email] = req.email
-                        it[password] = PasswordHasher.hash("barber123") // Password por defecto
+                        it[password] = PasswordHasher.hash("barber123")
                         it[rol] = "BARBERO"
                         it[bio] = req.bio
                         it[scheduleConfig] = req.scheduleConfiguration
                         it[activo] = req.activo
+                        it[imagenUrl] = req.imagenUrl
+                    }
+
+                    // Perfil de Barbero para el teléfono
+                    PerfilesBarberosTable.insert {
+                        it[usuarioId] = userId
+                        it[telefono] = req.telefono
+                        it[especialidad] = req.specialties.firstOrNull() ?: ""
+                        it[biografia] = req.bio
                     }
 
                     // Vincular especialidades por nombre
@@ -81,14 +88,13 @@ fun Route.barberMgmtRoutes() {
                         }
                     }
                 }
-                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Barbero creado con éxito"))
+                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Barbero creado"))
             } catch (e: Exception) {
-                println("❌ Error creating barber: ${e.message}")
                 call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Error: ${e.message}"))
             }
         }
 
-        // 3. Editar Barbero Existente
+        // 3. Editar Barbero
         put("/admin/barbers/{id}") {
             val id = call.parameters["id"]?.toIntOrNull()
             if (id == null) {
@@ -98,18 +104,22 @@ fun Route.barberMgmtRoutes() {
             try {
                 val req = call.receive<BarberCreateRequest>()
                 transaction {
-                    // Actualizar datos básicos
                     UsuariosTable.update({ UsuariosTable.id eq id }) {
                         it[nombre] = req.nombreCompleto
                         it[email] = req.email
                         it[bio] = req.bio
                         it[scheduleConfig] = req.scheduleConfiguration
                         it[activo] = req.activo
+                        it[imagenUrl] = req.imagenUrl
                     }
 
-                    // Actualizar especialidades: Borrar antiguas y poner las nuevas
+                    PerfilesBarberosTable.update({ PerfilesBarberosTable.usuarioId eq id }) {
+                        it[telefono] = req.telefono
+                        it[especialidad] = req.specialties.firstOrNull() ?: ""
+                        it[biografia] = req.bio
+                    }
+
                     BarberoEspecialidadesTable.deleteWhere { usuarioId eq id }
-                    
                     req.specialties.forEach { specName ->
                         val catId = CategoriasServiciosTable
                             .selectAll()
@@ -124,24 +134,9 @@ fun Route.barberMgmtRoutes() {
                         }
                     }
                 }
-                call.respond(AdminActionResponse(true, "Barbero actualizado correctamente"))
+                call.respond(AdminActionResponse(true, "Barbero actualizado"))
             } catch (e: Exception) {
-                println("❌ Error editing barber: ${e.message}")
-                call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Error al editar barbero"))
-            }
-        }
-
-        // 4. Estadísticas rápidas
-        get("/admin/barbers/stats") {
-            try {
-                val stats = transaction {
-                    val total = UsuariosTable.selectAll().where { UsuariosTable.rol eq "BARBERO" }.count().toInt()
-                    val active = UsuariosTable.selectAll().where { (UsuariosTable.rol eq "BARBERO") and (UsuariosTable.activo eq true) }.count().toInt()
-                    BarberStats(total, active)
-                }
-                call.respond(stats)
-            } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, "Error")
+                call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Error"))
             }
         }
     }

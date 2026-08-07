@@ -16,6 +16,7 @@ import kotlinx.io.readByteArray
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.time.LocalDate
 
 fun Route.customerRoutes() {
     authenticate("auth-jwt") {
@@ -53,7 +54,6 @@ fun Route.customerRoutes() {
             }
         }
         
-        // 1. Obtener Perfil (Alineado con snake_case)
         get("/customer/profile") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
@@ -83,7 +83,6 @@ fun Route.customerRoutes() {
             }
         }
         
-        // 2. Actualizar Perfil
         put("/customer/profile/update") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
@@ -119,7 +118,6 @@ fun Route.customerRoutes() {
             }
         }
 
-        // 3. Subir Foto (Multipart campo: "image")
         post("/customer/profile/photo") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
@@ -158,35 +156,42 @@ fun Route.customerRoutes() {
             }
         }
 
-        // 4. Agendar Cita (Cliente)
+        // 5. Agendar Cita (Cliente) - Alineado con BookingRequest y CartItems
         post("/client/booking") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
 
             try {
                 val req = call.receive<BookingRequest>()
+                val today = LocalDate.now().toString()
+                
                 transaction {
                     val user = UsuariosTable.selectAll().where { UsuariosTable.email eq email }.single()
                     val userId = user[UsuariosTable.id]
-                    val service = ServiciosTable.selectAll().where { ServiciosTable.id eq req.serviceId }.single()
 
-                    CitasTable.insert {
-                        it[usuarioId] = userId
-                        it[barberoId] = EntityID(req.barberId, UsuariosTable)
-                        it[serviceName] = service[ServiciosTable.nombre]
-                        it[date] = req.date
-                        it[startTime] = req.startTime
-                        it[totalPrice] = service[ServiciosTable.precio]
-                        it[status] = "pending"
+                    // Procesamos el carrito
+                    req.cartItems.forEach { item ->
+                        if (item.type == "service") {
+                            CitasTable.insert {
+                                it[usuarioId] = userId
+                                it[barberoId] = EntityID(req.barberId, UsuariosTable)
+                                it[serviceName] = item.name
+                                it[date] = req.date ?: today
+                                it[startTime] = req.startTime ?: "00:00"
+                                it[totalPrice] = item.price
+                                it[status] = "pending"
+                            }
+                        }
+                        // Si es producto, podríamos registrar una venta asociada aquí también
                     }
                 }
-                call.respond(HttpStatusCode.Created, mapOf("success" to true, "message" to "Cita agendada"))
+                call.respond(HttpStatusCode.Created, mapOf("success" to true, "message" to "Cita agendada con éxito"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("success" to false, "message" to "Error al agendar"))
+                println("❌ Error booking: ${e.message}")
+                call.respond(HttpStatusCode.BadRequest, mapOf("success" to false, "message" to "Error al agendar: ${e.message}"))
             }
         }
 
-        // 5. Mis Citas (Lista Completa del Cliente)
         get("/client/appointments") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
