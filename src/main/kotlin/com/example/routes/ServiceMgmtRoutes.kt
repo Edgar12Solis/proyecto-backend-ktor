@@ -89,7 +89,9 @@ fun Route.serviceMgmtRoutes() {
                     when (part) {
                         is PartData.FormItem -> {
                             if (part.name == "service") {
-                                serviceDTO = Json.decodeFromString<ServiceDTO>(part.value)
+                                // Usamos una configuración de Json flexible para ignorar campos desconocidos o nulos
+                                val jsonConfig = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
+                                serviceDTO = jsonConfig.decodeFromString<ServiceDTO>(part.value)
                                 println("📄 JSON de servicio decodificado: ${serviceDTO?.nombre}")
                             }
                         }
@@ -132,7 +134,7 @@ fun Route.serviceMgmtRoutes() {
                         it[nombre] = serviceDTO!!.nombre
                         it[precio] = serviceDTO!!.precio
                         it[duracion] = serviceDTO!!.duracion
-                        it[activo] = serviceDTO!!.activo
+                        it[activo] = serviceDTO!!.activo ?: true
                         it[categoriaId] = serviceDTO!!.serviceCategory.id!!
                         it[imagenUrl] = finalImageUrl
                     }
@@ -157,7 +159,7 @@ fun Route.serviceMgmtRoutes() {
                         it[nombre] = req.nombre
                         it[precio] = req.precio
                         it[duracion] = req.duracion
-                        it[activo] = req.activo
+                        it[activo] = req.activo ?: true
                         it[categoriaId] = req.serviceCategory.id!!
                     }
                 }
@@ -199,7 +201,7 @@ fun Route.serviceMgmtRoutes() {
                         it[descripcion] = req.descripcion
                         it[precioOriginal] = req.precioOriginal
                         it[precioPromocional] = req.precioPromocional
-                        it[activo] = req.activo
+                        it[activo] = req.activo ?: true
                         it[fechaInicio] = req.fechaInicio
                         it[fechaFinal] = req.fechaFinal
                     }
