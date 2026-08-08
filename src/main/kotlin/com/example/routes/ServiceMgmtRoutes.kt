@@ -62,7 +62,7 @@ fun Route.serviceMgmtRoutes() {
                                 precio = row[ServiciosTable.precio],
                                 duracion = row[ServiciosTable.duracion],
                                 activo = row[ServiciosTable.activo],
-                                imagenUrl = row[ServiciosTable.imagenUrl],
+                                imagenUrl = row[ServiciosTable.imagenUrl], // El Frontend espera el link completo
                                 serviceCategory = ServiceCategoryDTO(
                                     id = row[CategoriasServiciosTable.id].value,
                                     nombre = row[CategoriasServiciosTable.nombre]
@@ -76,7 +76,7 @@ fun Route.serviceMgmtRoutes() {
             }
         }
 
-        // POST /admin/services - ALINEADO CON MULTIPART + IMAGEN
+        // POST /admin/services - Crear con Imagen
         post("/admin/services") {
             try {
                 val multipart = call.receiveMultipart()
@@ -85,21 +85,17 @@ fun Route.serviceMgmtRoutes() {
                 var extension = "jpg"
 
                 multipart.forEachPart { part ->
-                    println("📦 Parte recibida: ${part.name}")
                     when (part) {
                         is PartData.FormItem -> {
                             if (part.name == "service") {
-                                // Usamos una configuración de Json flexible para ignorar campos desconocidos o nulos
                                 val jsonConfig = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
                                 serviceDTO = jsonConfig.decodeFromString<ServiceDTO>(part.value)
-                                println("📄 JSON de servicio decodificado: ${serviceDTO?.nombre}")
                             }
                         }
                         is PartData.FileItem -> {
                             if (part.name == "image") {
                                 imageBytes = part.provider().readRemaining().readByteArray()
                                 extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
-                                println("🖼️ Imagen recibida: ${imageBytes?.size} bytes")
                             }
                         }
                         else -> {}
@@ -108,7 +104,6 @@ fun Route.serviceMgmtRoutes() {
                 }
 
                 if (serviceDTO == null) {
-                    println("❌ Error: serviceDTO es nulo")
                     call.respond(HttpStatusCode.OK, AdminActionResponse(false, "No se recibió la información del servicio"))
                     return@post
                 }
@@ -116,21 +111,15 @@ fun Route.serviceMgmtRoutes() {
                 transaction {
                     var finalImageUrl: String? = serviceDTO!!.imagenUrl
 
-                    // 1. Guardar la imagen físicamente si existe
                     if (imageBytes != null && imageBytes!!.isNotEmpty()) {
                         val uploadDir = java.io.File("uploads/services")
                         if (!uploadDir.exists()) uploadDir.mkdirs()
-                        
                         val fileName = "service_${System.currentTimeMillis()}.$extension"
-                        val file = java.io.File(uploadDir, fileName)
-                        file.writeBytes(imageBytes!!)
-                        
+                        java.io.File(uploadDir, fileName).writeBytes(imageBytes!!)
                         finalImageUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/services/$fileName"
-                        println("💾 Foto guardada en: $finalImageUrl")
                     }
 
-                    // 2. Insertar en la Base de Datos
-                    val newId = ServiciosTable.insertAndGetId {
+                    ServiciosTable.insert {
                         it[nombre] = serviceDTO!!.nombre
                         it[precio] = serviceDTO!!.precio
                         it[duracion] = serviceDTO!!.duracion
@@ -138,34 +127,76 @@ fun Route.serviceMgmtRoutes() {
                         it[categoriaId] = serviceDTO!!.serviceCategory.id!!
                         it[imagenUrl] = finalImageUrl
                     }
-                    println("✅ Servicio insertado en BD con ID: ${newId.value}")
                 }
-
-                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Servicio guardado correctamente en la BD"))
-
+                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Servicio guardado correctamente"))
             } catch (e: Exception) {
-                println("❌ ERROR CRÍTICO creando servicio: ${e.message}")
-                e.printStackTrace()
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error al crear el servicio: ${e.message}"))
+                println("❌ Error creando servicio: ${e.message}")
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error al crear el servicio"))
             }
         }
         
+        // PUT /admin/services/{id} - Actualizar con Imagen (Opcional)
         put("/admin/services/{id}") {
             val id = call.parameters["id"]?.toIntOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest, "ID inválido")
+            
             try {
-                val req = call.receive<ServiceDTO>()
+                val multipart = call.receiveMultipart()
+                var serviceDTO: ServiceDTO? = null
+                var imageBytes: ByteArray? = null
+                var extension = "jpg"
+
+                multipart.forEachPart { part ->
+                    when (part) {
+                        is PartData.FormItem -> {
+                            if (part.name == "service") {
+                                val jsonConfig = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
+                                serviceDTO = jsonConfig.decodeFromString<ServiceDTO>(part.value)
+                            }
+                        }
+                        is PartData.FileItem -> {
+                            if (part.name == "image") {
+                                imageBytes = part.provider().readRemaining().readByteArray()
+                                extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
+                            }
+                        }
+                        else -> {}
+                    }
+                    part.dispose()
+                }
+
+                if (serviceDTO == null) {
+                    call.respond(HttpStatusCode.OK, AdminActionResponse(false, "No se recibió la información para actualizar"))
+                    return@put
+                }
+
                 transaction {
+                    var finalImageUrl: String? = null
+
+                    // Si mandaron imagen nueva, la guardamos
+                    if (imageBytes != null && imageBytes!!.isNotEmpty()) {
+                        val uploadDir = java.io.File("uploads/services")
+                        if (!uploadDir.exists()) uploadDir.mkdirs()
+                        val fileName = "service_${System.currentTimeMillis()}.$extension"
+                        java.io.File(uploadDir, fileName).writeBytes(imageBytes!!)
+                        finalImageUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/services/$fileName"
+                    }
+
                     ServiciosTable.update({ ServiciosTable.id eq id }) {
-                        it[nombre] = req.nombre
-                        it[precio] = req.precio
-                        it[duracion] = req.duracion
-                        it[activo] = req.activo ?: true
-                        it[categoriaId] = req.serviceCategory.id!!
+                        it[nombre] = serviceDTO!!.nombre
+                        it[precio] = serviceDTO!!.precio
+                        it[duracion] = serviceDTO!!.duracion
+                        it[activo] = serviceDTO!!.activo ?: true
+                        it[categoriaId] = serviceDTO!!.serviceCategory.id!!
+                        // Solo actualizamos la URL si se envió una imagen nueva
+                        if (finalImageUrl != null) {
+                            it[imagenUrl] = finalImageUrl
+                        }
                     }
                 }
-                call.respond(AdminActionResponse(true, "Servicio actualizado"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Servicio actualizado correctamente"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
+                println("❌ Error actualizando servicio: ${e.message}")
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error al actualizar el servicio"))
             }
         }
 
