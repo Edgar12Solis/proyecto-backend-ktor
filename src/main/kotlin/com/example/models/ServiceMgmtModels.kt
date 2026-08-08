@@ -31,11 +31,11 @@ data class PromotionDTO(
     val id: Int? = null,
     val nombre: String,
     val descripcion: String? = null,
-    val precioOriginal: Double,
-    val precioPromocional: Double,
+    @SerialName("precio_original") val precioOriginal: Double,
+    @SerialName("precio_promocional") val precioPromocional: Double,
     val activo: Boolean? = true,
-    val fechaInicio: String,
-    val fechaFinal: String,
+    @SerialName("fecha_inicio") val fechaInicio: String,
+    @SerialName("fecha_final") val fechaFinal: String,
     @SerialName("imagen_url") val imagenUrl: String? = null,
     val selectedServiceIds: List<Int>? = null
 )

@@ -15,6 +15,7 @@ import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.time.LocalDate
 
 fun Route.serviceMgmtRoutes() {
     authenticate("auth-jwt") {
@@ -29,7 +30,7 @@ fun Route.serviceMgmtRoutes() {
                 }
                 call.respond(stats)
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, mapOf("totalServices" to 0, "totalPromotions" to 0))
+                call.respond(HttpStatusCode.OK, mapOf("totalServices" to 0, "totalPromotions" to 0))
             }
         }
 
@@ -59,7 +60,7 @@ fun Route.serviceMgmtRoutes() {
             }
         }
 
-        // 3. Servicios
+        // 3. Servicios (Asegurando imagen_url y snake_case)
         get("/admin/services") {
             try {
                 val services = transaction {
@@ -183,7 +184,7 @@ fun Route.serviceMgmtRoutes() {
             }
         }
 
-        // 4. Promociones (Multipart)
+        // 4. Promociones (Validación de Fecha y snake_case)
         get("/admin/promotions") {
             try {
                 val promos = transaction {
@@ -229,6 +230,13 @@ fun Route.serviceMgmtRoutes() {
                 }
 
                 if (promoDTO == null) return@post call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Falta info"))
+
+                // VALIDACIÓN DE FECHA: No antes de hoy
+                val today = LocalDate.now()
+                val startDate = LocalDate.parse(promoDTO!!.fechaInicio)
+                if (startDate.isBefore(today)) {
+                    return@post call.respond(HttpStatusCode.OK, AdminActionResponse(false, "La fecha de inicio no puede ser anterior a hoy"))
+                }
 
                 transaction {
                     var finalImageUrl: String? = null
