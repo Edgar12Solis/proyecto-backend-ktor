@@ -19,7 +19,21 @@ import org.jetbrains.exposed.sql.transactions.transaction
 fun Route.serviceMgmtRoutes() {
     authenticate("auth-jwt") {
 
-        // 1. Categorías de Servicios
+        // 1. Estadísticas (Reparación de Contadores)
+        get("/admin/services/stats") {
+            try {
+                val stats = transaction {
+                    val totalServices = ServiciosTable.selectAll().count().toInt()
+                    val totalPromotions = PromocionesTable.selectAll().count().toInt()
+                    ServiceStats(totalServices, totalPromotions)
+                }
+                call.respond(stats)
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, mapOf("totalServices" to 0, "totalPromotions" to 0))
+            }
+        }
+
+        // 2. Categorías de Servicios
         get("/admin/service-categories") {
             try {
                 val categories = transaction {
@@ -36,20 +50,16 @@ fun Route.serviceMgmtRoutes() {
         post("/admin/service-categories") {
             try {
                 val req = call.receive<CategoryCreateRequest>()
-                println("📂 Creando categoría: ${req.nombre}")
                 transaction {
-                    CategoriasServiciosTable.insert {
-                        it[nombre] = req.nombre
-                    }
+                    CategoriasServiciosTable.insert { it[nombre] = req.nombre }
                 }
-                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Categoría creada con éxito"))
+                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Categoría creada"))
             } catch (e: Exception) {
-                println("❌ Error categorías: ${e.message}")
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error"))
             }
         }
 
-        // 2. Servicios
+        // 3. Servicios
         get("/admin/services") {
             try {
                 val services = transaction {
@@ -62,7 +72,7 @@ fun Route.serviceMgmtRoutes() {
                                 precio = row[ServiciosTable.precio],
                                 duracion = row[ServiciosTable.duracion],
                                 activo = row[ServiciosTable.activo],
-                                imagenUrl = row[ServiciosTable.imagenUrl], // El Frontend espera el link completo
+                                imagenUrl = row[ServiciosTable.imagenUrl],
                                 serviceCategory = ServiceCategoryDTO(
                                     id = row[CategoriasServiciosTable.id].value,
                                     nombre = row[CategoriasServiciosTable.nombre]
@@ -72,11 +82,10 @@ fun Route.serviceMgmtRoutes() {
                 }
                 call.respond(services)
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, "Error al listar servicios")
+                call.respond(HttpStatusCode.InternalServerError, "Error")
             }
         }
 
-        // POST /admin/services - Crear con Imagen
         post("/admin/services") {
             try {
                 val multipart = call.receiveMultipart()
@@ -86,36 +95,27 @@ fun Route.serviceMgmtRoutes() {
 
                 multipart.forEachPart { part ->
                     when (part) {
-                        is PartData.FormItem -> {
-                            if (part.name == "service") {
-                                val jsonConfig = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
-                                serviceDTO = jsonConfig.decodeFromString<ServiceDTO>(part.value)
-                            }
+                        is PartData.FormItem -> if (part.name == "service") {
+                            serviceDTO = Json { ignoreUnknownKeys = true }.decodeFromString<ServiceDTO>(part.value)
                         }
-                        is PartData.FileItem -> {
-                            if (part.name == "image") {
-                                imageBytes = part.provider().readRemaining().readByteArray()
-                                extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
-                            }
+                        is PartData.FileItem -> if (part.name == "image") {
+                            imageBytes = part.provider().readRemaining().readByteArray()
+                            extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
                         }
                         else -> {}
                     }
                     part.dispose()
                 }
 
-                if (serviceDTO == null) {
-                    call.respond(HttpStatusCode.OK, AdminActionResponse(false, "No se recibió la información del servicio"))
-                    return@post
-                }
+                if (serviceDTO == null) return@post call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Falta info"))
 
                 transaction {
-                    var finalImageUrl: String? = serviceDTO!!.imagenUrl
-
+                    var finalImageUrl = serviceDTO!!.imagenUrl
                     if (imageBytes != null && imageBytes!!.isNotEmpty()) {
-                        val uploadDir = java.io.File("uploads/services")
-                        if (!uploadDir.exists()) uploadDir.mkdirs()
                         val fileName = "service_${System.currentTimeMillis()}.$extension"
-                        java.io.File(uploadDir, fileName).writeBytes(imageBytes!!)
+                        val file = java.io.File("uploads/services/$fileName")
+                        file.parentFile.mkdirs()
+                        file.writeBytes(imageBytes!!)
                         finalImageUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/services/$fileName"
                     }
 
@@ -128,17 +128,14 @@ fun Route.serviceMgmtRoutes() {
                         it[imagenUrl] = finalImageUrl
                     }
                 }
-                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Servicio guardado correctamente"))
+                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Servicio creado"))
             } catch (e: Exception) {
-                println("❌ Error creando servicio: ${e.message}")
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error al crear el servicio"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
             }
         }
-        
-        // PUT /admin/services/{id} - Actualizar con Imagen (Opcional)
+
         put("/admin/services/{id}") {
             val id = call.parameters["id"]?.toIntOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest, "ID inválido")
-            
             try {
                 val multipart = call.receiveMultipart()
                 var serviceDTO: ServiceDTO? = null
@@ -147,37 +144,27 @@ fun Route.serviceMgmtRoutes() {
 
                 multipart.forEachPart { part ->
                     when (part) {
-                        is PartData.FormItem -> {
-                            if (part.name == "service") {
-                                val jsonConfig = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
-                                serviceDTO = jsonConfig.decodeFromString<ServiceDTO>(part.value)
-                            }
+                        is PartData.FormItem -> if (part.name == "service") {
+                            serviceDTO = Json { ignoreUnknownKeys = true }.decodeFromString<ServiceDTO>(part.value)
                         }
-                        is PartData.FileItem -> {
-                            if (part.name == "image") {
-                                imageBytes = part.provider().readRemaining().readByteArray()
-                                extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
-                            }
+                        is PartData.FileItem -> if (part.name == "image") {
+                            imageBytes = part.provider().readRemaining().readByteArray()
+                            extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
                         }
                         else -> {}
                     }
                     part.dispose()
                 }
 
-                if (serviceDTO == null) {
-                    call.respond(HttpStatusCode.OK, AdminActionResponse(false, "No se recibió la información para actualizar"))
-                    return@put
-                }
+                if (serviceDTO == null) return@put call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Falta info"))
 
                 transaction {
                     var finalImageUrl: String? = null
-
-                    // Si mandaron imagen nueva, la guardamos
                     if (imageBytes != null && imageBytes!!.isNotEmpty()) {
-                        val uploadDir = java.io.File("uploads/services")
-                        if (!uploadDir.exists()) uploadDir.mkdirs()
                         val fileName = "service_${System.currentTimeMillis()}.$extension"
-                        java.io.File(uploadDir, fileName).writeBytes(imageBytes!!)
+                        val file = java.io.File("uploads/services/$fileName")
+                        file.parentFile.mkdirs()
+                        file.writeBytes(imageBytes!!)
                         finalImageUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/services/$fileName"
                     }
 
@@ -187,20 +174,16 @@ fun Route.serviceMgmtRoutes() {
                         it[duracion] = serviceDTO!!.duracion
                         it[activo] = serviceDTO!!.activo ?: true
                         it[categoriaId] = serviceDTO!!.serviceCategory.id!!
-                        // Solo actualizamos la URL si se envió una imagen nueva
-                        if (finalImageUrl != null) {
-                            it[imagenUrl] = finalImageUrl
-                        }
+                        if (finalImageUrl != null) it[imagenUrl] = finalImageUrl
                     }
                 }
-                call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Servicio actualizado correctamente"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Servicio actualizado"))
             } catch (e: Exception) {
-                println("❌ Error actualizando servicio: ${e.message}")
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error al actualizar el servicio"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error"))
             }
         }
 
-        // 3. Promociones
+        // 4. Promociones (Multipart)
         get("/admin/promotions") {
             try {
                 val promos = transaction {
@@ -213,31 +196,62 @@ fun Route.serviceMgmtRoutes() {
                             precioPromocional = row[PromocionesTable.precioPromocional],
                             activo = row[PromocionesTable.activo],
                             fechaInicio = row[PromocionesTable.fechaInicio],
-                            fechaFinal = row[PromocionesTable.fechaFinal]
+                            fechaFinal = row[PromocionesTable.fechaFinal],
+                            imagenUrl = row[PromocionesTable.imagenUrl]
                         )
                     }
                 }
                 call.respond(promos)
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, "Error al listar promociones")
+                call.respond(HttpStatusCode.InternalServerError, "Error")
             }
         }
 
         post("/admin/promotions") {
             try {
-                val req = call.receive<PromotionDTO>()
+                val multipart = call.receiveMultipart()
+                var promoDTO: PromotionDTO? = null
+                var imageBytes: ByteArray? = null
+                var extension = "jpg"
+
+                multipart.forEachPart { part ->
+                    when (part) {
+                        is PartData.FormItem -> if (part.name == "promotion") {
+                            promoDTO = Json { ignoreUnknownKeys = true }.decodeFromString<PromotionDTO>(part.value)
+                        }
+                        is PartData.FileItem -> if (part.name == "image") {
+                            imageBytes = part.provider().readRemaining().readByteArray()
+                            extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
+                        }
+                        else -> {}
+                    }
+                    part.dispose()
+                }
+
+                if (promoDTO == null) return@post call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Falta info"))
+
                 transaction {
+                    var finalImageUrl: String? = null
+                    if (imageBytes != null && imageBytes!!.isNotEmpty()) {
+                        val fileName = "promo_${System.currentTimeMillis()}.$extension"
+                        val file = java.io.File("uploads/promos/$fileName")
+                        file.parentFile.mkdirs()
+                        file.writeBytes(imageBytes!!)
+                        finalImageUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/promos/$fileName"
+                    }
+
                     val promoId = PromocionesTable.insertAndGetId {
-                        it[nombre] = req.nombre
-                        it[descripcion] = req.descripcion
-                        it[precioOriginal] = req.precioOriginal
-                        it[precioPromocional] = req.precioPromocional
-                        it[activo] = req.activo ?: true
-                        it[fechaInicio] = req.fechaInicio
-                        it[fechaFinal] = req.fechaFinal
+                        it[nombre] = promoDTO!!.nombre
+                        it[descripcion] = promoDTO!!.descripcion
+                        it[precioOriginal] = promoDTO!!.precioOriginal
+                        it[precioPromocional] = promoDTO!!.precioPromocional
+                        it[activo] = promoDTO!!.activo ?: true
+                        it[fechaInicio] = promoDTO!!.fechaInicio
+                        it[fechaFinal] = promoDTO!!.fechaFinal
+                        it[imagenUrl] = finalImageUrl
                     }
                     
-                    req.selectedServiceIds?.forEach { sId ->
+                    promoDTO!!.selectedServiceIds?.forEach { sId ->
                         PromocionServiciosTable.insert {
                             it[promocionId] = promoId
                             it[servicioId] = sId
@@ -247,6 +261,67 @@ fun Route.serviceMgmtRoutes() {
                 call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Promoción creada"))
             } catch (e: Exception) {
                 call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
+            }
+        }
+
+        put("/admin/promotions/{id}") {
+            val id = call.parameters["id"]?.toIntOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest, "ID inválido")
+            try {
+                val multipart = call.receiveMultipart()
+                var promoDTO: PromotionDTO? = null
+                var imageBytes: ByteArray? = null
+                var extension = "jpg"
+
+                multipart.forEachPart { part ->
+                    when (part) {
+                        is PartData.FormItem -> if (part.name == "promotion") {
+                            promoDTO = Json { ignoreUnknownKeys = true }.decodeFromString<PromotionDTO>(part.value)
+                        }
+                        is PartData.FileItem -> if (part.name == "image") {
+                            imageBytes = part.provider().readRemaining().readByteArray()
+                            extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
+                        }
+                        else -> {}
+                    }
+                    part.dispose()
+                }
+
+                if (promoDTO == null) return@put call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Falta info"))
+
+                transaction {
+                    var finalImageUrl: String? = null
+                    if (imageBytes != null && imageBytes!!.isNotEmpty()) {
+                        val fileName = "promo_${System.currentTimeMillis()}.$extension"
+                        val file = java.io.File("uploads/promos/$fileName")
+                        file.parentFile.mkdirs()
+                        file.writeBytes(imageBytes!!)
+                        finalImageUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/promos/$fileName"
+                    }
+
+                    PromocionesTable.update({ PromocionesTable.id eq id }) {
+                        it[nombre] = promoDTO!!.nombre
+                        it[descripcion] = promoDTO!!.descripcion
+                        it[precioOriginal] = promoDTO!!.precioOriginal
+                        it[precioPromocional] = promoDTO!!.precioPromocional
+                        it[activo] = promoDTO!!.activo ?: true
+                        it[fechaInicio] = promoDTO!!.fechaInicio
+                        it[fechaFinal] = promoDTO!!.fechaFinal
+                        if (finalImageUrl != null) it[imagenUrl] = finalImageUrl
+                    }
+
+                    if (promoDTO!!.selectedServiceIds != null) {
+                        PromocionServiciosTable.deleteWhere { PromocionServiciosTable.promocionId eq id }
+                        promoDTO!!.selectedServiceIds!!.forEach { sId ->
+                            PromocionServiciosTable.insert {
+                                it[promocionId] = id
+                                it[servicioId] = sId
+                            }
+                        }
+                    }
+                }
+                call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Promoción actualizada"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error"))
             }
         }
 

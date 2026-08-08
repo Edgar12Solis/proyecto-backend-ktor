@@ -11,6 +11,7 @@ object PromocionesTable : IntIdTable("promociones") {
     val activo = bool("activo").default(true)
     val fechaInicio = varchar("fecha_inicio", 50)
     val fechaFinal = varchar("fecha_final", 50)
+    val imagenUrl = varchar("imagen_url", 255).nullable()
 }
 
 object PromocionServiciosTable : IntIdTable("promocion_servicios") {
