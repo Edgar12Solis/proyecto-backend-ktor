@@ -3,11 +3,15 @@ package com.example.routes
 import com.example.data.*
 import com.example.models.*
 import io.ktor.http.*
+import io.ktor.http.content.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.utils.io.*
+import kotlinx.io.readByteArray
+import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -29,7 +33,6 @@ fun Route.serviceMgmtRoutes() {
             }
         }
 
-        // ALINEADO CON PROMPT MAESTRO
         post("/admin/service-categories") {
             try {
                 val req = call.receive<CategoryCreateRequest>()
@@ -40,7 +43,7 @@ fun Route.serviceMgmtRoutes() {
                 }
                 call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Categoría creada con éxito"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: \${e.message}"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
             }
         }
 
@@ -71,21 +74,69 @@ fun Route.serviceMgmtRoutes() {
             }
         }
 
+        // POST /admin/services - ALINEADO CON MULTIPART + IMAGEN
         post("/admin/services") {
             try {
-                val req = call.receive<ServiceDTO>()
+                val multipart = call.receiveMultipart()
+                var serviceDTO: ServiceDTO? = null
+                var imageBytes: ByteArray? = null
+                var extension = "jpg"
+
+                multipart.forEachPart { part ->
+                    when (part) {
+                        is PartData.FormItem -> {
+                            if (part.name == "service") {
+                                // Decodificar el JSON que viene como String en la parte "service"
+                                serviceDTO = Json.decodeFromString<ServiceDTO>(part.value)
+                            }
+                        }
+                        is PartData.FileItem -> {
+                            if (part.name == "image") {
+                                imageBytes = part.provider().readRemaining().readByteArray()
+                                extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
+                            }
+                        }
+                        else -> {}
+                    }
+                    part.dispose()
+                }
+
+                if (serviceDTO == null) {
+                    call.respond(HttpStatusCode.OK, AdminActionResponse(false, "No se recibió la información del servicio"))
+                    return@post
+                }
+
+                var finalImageUrl: String? = null
+
+                // 1. Guardar la imagen físicamente si existe
+                if (imageBytes != null && imageBytes!!.isNotEmpty()) {
+                    val uploadDir = java.io.File("uploads/services")
+                    if (!uploadDir.exists()) uploadDir.mkdirs()
+                    
+                    val fileName = "service_${System.currentTimeMillis()}.$extension"
+                    val file = java.io.File(uploadDir, fileName)
+                    file.writeBytes(imageBytes!!)
+                    
+                    finalImageUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/services/$fileName"
+                }
+
+                // 2. Insertar en la Base de Datos
                 transaction {
                     ServiciosTable.insert {
-                        it[nombre] = req.nombre
-                        it[precio] = req.precio
-                        it[duracion] = req.duracion
-                        it[activo] = req.activo
-                        it[categoriaId] = req.serviceCategory.id
+                        it[nombre] = serviceDTO!!.nombre
+                        it[precio] = serviceDTO!!.precio
+                        it[duracion] = serviceDTO!!.duracion
+                        it[activo] = serviceDTO!!.activo
+                        it[categoriaId] = serviceDTO!!.serviceCategory.id!!
+                        it[imagenUrl] = finalImageUrl ?: serviceDTO!!.imagenUrl
                     }
                 }
-                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Servicio creado"))
+
+                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Servicio creado con éxito"))
+
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: \${e.message}"))
+                println("❌ Error creando servicio multipart: ${e.message}")
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error al crear el servicio: ${e.message}"))
             }
         }
         
@@ -99,12 +150,12 @@ fun Route.serviceMgmtRoutes() {
                         it[precio] = req.precio
                         it[duracion] = req.duracion
                         it[activo] = req.activo
-                        it[categoriaId] = req.serviceCategory.id
+                        it[categoriaId] = req.serviceCategory.id!!
                     }
                 }
                 call.respond(AdminActionResponse(true, "Servicio actualizado"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: \${e.message}"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
             }
         }
 
@@ -154,7 +205,7 @@ fun Route.serviceMgmtRoutes() {
                 }
                 call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Promoción creada"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: \${e.message}"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
             }
         }
 
