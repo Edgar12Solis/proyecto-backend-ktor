@@ -11,6 +11,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 
 fun Route.adminRoutes() {
@@ -87,7 +88,7 @@ fun Route.adminRoutes() {
             }
         }
 
-        // 3. Obtener Citas con filtrado por rol (Admin o Barbero)
+        // 3. Obtener Citas con filtrado por rol (Admin o Barbero) - ALINEADO CON PROMPT MAESTRO
         get("/admin/appointments") {
             val dateParam = call.request.queryParameters["date"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Falta date")
             val principal = call.principal<JWTPrincipal>()
@@ -109,7 +110,6 @@ fun Route.adminRoutes() {
                         .selectAll()
                         .where { CitasTable.date eq dateParam }
 
-                    // Filtrado para Barberos (solo ven sus propias citas)
                     if (userRole == "BARBERO") {
                         query = query.andWhere { CitasTable.barberoId eq userId }
                     }
@@ -137,7 +137,6 @@ fun Route.adminRoutes() {
                 }
                 call.respond(appointments)
             } catch (e: Exception) {
-                println("Error appointments: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, "Error")
             }
         }
@@ -174,6 +173,34 @@ fun Route.adminRoutes() {
                 call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Huella vinculada"))
             } catch (e: Exception) {
                 call.respond(HttpStatusCode.InternalServerError, AdminActionResponse(false, "Error"))
+            }
+        }
+
+        // 6. Listar Clientes (Para directorio de barbero)
+        get("/admin/customers") {
+            try {
+                val customers = transaction {
+                    (UsuariosTable innerJoin PerfilesClientesTable)
+                        .selectAll()
+                        .where { UsuariosTable.rol eq "CLIENTE" }
+                        .map { row ->
+                            CustomerMgmtDetail(
+                                id = row[UsuariosTable.id].value,
+                                nombre = row[PerfilesClientesTable.nombres],
+                                apellido = row[PerfilesClientesTable.apellidos],
+                                telefono = row[PerfilesClientesTable.telefono],
+                                correo = row[UsuariosTable.email],
+                                fechaRegistro = row[UsuariosTable.fechaRegistro],
+                                estado = row[PerfilesClientesTable.estado],
+                                fecha_cumpleanos = row[PerfilesClientesTable.fechaNacimiento],
+                                direccion = row[PerfilesClientesTable.direccion],
+                                notas = row[PerfilesClientesTable.notas]
+                            )
+                        }
+                }
+                call.respond(customers)
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, "Error")
             }
         }
     }

@@ -49,7 +49,7 @@ fun Route.customerRoutes() {
                 }
                 call.respond(data)
             } catch (e: Exception) {
-                println("Error dashboard: ${e.message}")
+                println("Error dashboard: \${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, "Error al obtener datos del dashboard")
             }
         }
@@ -100,7 +100,7 @@ fun Route.customerRoutes() {
                     val userId = user[UsuariosTable.id]
                     
                     UsuariosTable.update({ UsuariosTable.id eq userId }) {
-                        it[UsuariosTable.nombre] = "${req.nombres} ${req.apellidos}"
+                        it[UsuariosTable.nombre] = "\${req.nombres} \${req.apellidos}"
                         if (!req.password.isNullOrBlank()) it[UsuariosTable.password] = PasswordHasher.hash(req.password)
                     }
                     
@@ -131,7 +131,7 @@ fun Route.customerRoutes() {
                     if (part is PartData.FileItem && part.name == "image") {
                         fileBytes = part.provider().readRemaining().readByteArray()
                         val extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
-                        fileName = "profile_${System.currentTimeMillis()}.$extension"
+                        fileName = "profile_\${System.currentTimeMillis()}.\$extension"
                     }
                     part.dispose()
                 }
@@ -141,7 +141,7 @@ fun Route.customerRoutes() {
                     if (!uploadDir.exists()) uploadDir.mkdirs()
                     java.io.File(uploadDir, fileName).writeBytes(fileBytes!!)
 
-                    val publicUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/$fileName"
+                    val publicUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/\$fileName"
                     transaction {
                         UsuariosTable.update({ UsuariosTable.email eq email }) {
                             it[UsuariosTable.imagenUrl] = publicUrl
@@ -156,7 +156,7 @@ fun Route.customerRoutes() {
             }
         }
 
-        // 5. Agendar Cita (Cliente) - Alineado con BookingRequest y CartItems
+        // 5. Agendar Cita (Cliente) - ALINEADO CON PROMPT MAESTRO
         post("/client/booking") {
             val principal = call.principal<JWTPrincipal>()
             val email = principal?.payload?.getClaim("email")?.asString() ?: ""
@@ -169,7 +169,6 @@ fun Route.customerRoutes() {
                     val user = UsuariosTable.selectAll().where { UsuariosTable.email eq email }.single()
                     val userId = user[UsuariosTable.id]
 
-                    // Procesamos el carrito
                     req.cartItems.forEach { item ->
                         if (item.type == "service") {
                             CitasTable.insert {
@@ -182,13 +181,12 @@ fun Route.customerRoutes() {
                                 it[status] = "pending"
                             }
                         }
-                        // Si es producto, podríamos registrar una venta asociada aquí también
                     }
                 }
                 call.respond(HttpStatusCode.Created, mapOf("success" to true, "message" to "Cita agendada con éxito"))
             } catch (e: Exception) {
-                println("❌ Error booking: ${e.message}")
-                call.respond(HttpStatusCode.BadRequest, mapOf("success" to false, "message" to "Error al agendar: ${e.message}"))
+                println("❌ Error booking: \${e.message}")
+                call.respond(HttpStatusCode.OK, mapOf("success" to false, "message" to "Error al agendar: \${e.message}"))
             }
         }
 

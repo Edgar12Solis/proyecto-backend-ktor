@@ -49,7 +49,7 @@ fun Route.barberMgmtRoutes() {
             }
         }
 
-        // 2. Crear Barbero (Alineado con DTO)
+        // 2. Crear Barbero (Alineado con DTO del Prompt Maestro)
         post("/admin/barbers") {
             try {
                 val req = call.receive<BarberCreateRequest>()
@@ -65,7 +65,6 @@ fun Route.barberMgmtRoutes() {
                         it[imagenUrl] = req.imagenUrl
                     }
 
-                    // Perfil de Barbero para el teléfono
                     PerfilesBarberosTable.insert {
                         it[usuarioId] = userId
                         it[telefono] = req.telefono
@@ -90,17 +89,13 @@ fun Route.barberMgmtRoutes() {
                 }
                 call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Barbero creado"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Error: ${e.message}"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: \${e.message}"))
             }
         }
 
         // 3. Editar Barbero
         put("/admin/barbers/{id}") {
-            val id = call.parameters["id"]?.toIntOrNull()
-            if (id == null) {
-                call.respond(HttpStatusCode.BadRequest, "ID inválido")
-                return@put
-            }
+            val id = call.parameters["id"]?.toIntOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest, "ID inválido")
             try {
                 val req = call.receive<BarberCreateRequest>()
                 transaction {
@@ -119,7 +114,7 @@ fun Route.barberMgmtRoutes() {
                         it[biografia] = req.bio
                     }
 
-                    BarberoEspecialidadesTable.deleteWhere { usuarioId eq id }
+                    BarberoEspecialidadesTable.deleteWhere { BarberoEspecialidadesTable.usuarioId eq id }
                     req.specialties.forEach { specName ->
                         val catId = CategoriasServiciosTable
                             .selectAll()
@@ -136,7 +131,21 @@ fun Route.barberMgmtRoutes() {
                 }
                 call.respond(AdminActionResponse(true, "Barbero actualizado"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Error"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error"))
+            }
+        }
+        
+        // 4. Estadísticas
+        get("/admin/barbers/stats") {
+            try {
+                val stats = transaction {
+                    val total = UsuariosTable.selectAll().where { UsuariosTable.rol eq "BARBERO" }.count().toInt()
+                    val active = UsuariosTable.selectAll().where { (UsuariosTable.rol eq "BARBERO") and (UsuariosTable.activo eq true) }.count().toInt()
+                    BarberStats(total, active)
+                }
+                call.respond(stats)
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, "Error")
             }
         }
     }

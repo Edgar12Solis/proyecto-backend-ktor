@@ -52,3 +52,8 @@ data class UpdateAdminProfileRequest(
     val email: String,
     val password: String? = null
 )
+
+@Serializable
+data class CategoryCreateRequest(
+    val nombre: String
+)

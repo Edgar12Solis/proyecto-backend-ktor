@@ -29,17 +29,18 @@ fun Route.serviceMgmtRoutes() {
             }
         }
 
+        // ALINEADO CON PROMPT MAESTRO
         post("/admin/service-categories") {
             try {
-                val req = call.receive<ServiceCategoryDTO>()
+                val req = call.receive<CategoryCreateRequest>()
                 transaction {
                     CategoriasServiciosTable.insert {
                         it[nombre] = req.nombre
                     }
                 }
-                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Categoría de servicio creada"))
+                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Categoría creada con éxito"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Error: ${e.message}"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: \${e.message}"))
             }
         }
 
@@ -84,7 +85,26 @@ fun Route.serviceMgmtRoutes() {
                 }
                 call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Servicio creado"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Error: ${e.message}"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: \${e.message}"))
+            }
+        }
+        
+        put("/admin/services/{id}") {
+            val id = call.parameters["id"]?.toIntOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest, "ID inválido")
+            try {
+                val req = call.receive<ServiceDTO>()
+                transaction {
+                    ServiciosTable.update({ ServiciosTable.id eq id }) {
+                        it[nombre] = req.nombre
+                        it[precio] = req.precio
+                        it[duracion] = req.duracion
+                        it[activo] = req.activo
+                        it[categoriaId] = req.serviceCategory.id
+                    }
+                }
+                call.respond(AdminActionResponse(true, "Servicio actualizado"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: \${e.message}"))
             }
         }
 
@@ -134,24 +154,22 @@ fun Route.serviceMgmtRoutes() {
                 }
                 call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Promoción creada"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Error: ${e.message}"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: \${e.message}"))
             }
         }
 
         post("/admin/promotions/{id}/toggle") {
-            val id = call.parameters["id"]?.toIntOrNull()
-            if (id != null) {
-                try {
-                    transaction {
-                        val current = PromocionesTable.selectAll().where { PromocionesTable.id eq id }.single()[PromocionesTable.activo]
-                        PromocionesTable.update({ PromocionesTable.id eq id }) {
-                            it[activo] = !current
-                        }
+            val id = call.parameters["id"]?.toIntOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, "ID inválido")
+            try {
+                transaction {
+                    val current = PromocionesTable.selectAll().where { PromocionesTable.id eq id }.single()[PromocionesTable.activo]
+                    PromocionesTable.update({ PromocionesTable.id eq id }) {
+                        it[activo] = !current
                     }
-                    call.respond(AdminActionResponse(true, "Estado cambiado"))
-                } catch (e: Exception) {
-                    call.respond(HttpStatusCode.InternalServerError, "Error")
                 }
+                call.respond(AdminActionResponse(true, "Estado cambiado"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error"))
             }
         }
 
