@@ -36,6 +36,7 @@ fun Route.serviceMgmtRoutes() {
         post("/admin/service-categories") {
             try {
                 val req = call.receive<CategoryCreateRequest>()
+                println("📂 Creando categoría: ${req.nombre}")
                 transaction {
                     CategoriasServiciosTable.insert {
                         it[nombre] = req.nombre
@@ -43,6 +44,7 @@ fun Route.serviceMgmtRoutes() {
                 }
                 call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Categoría creada con éxito"))
             } catch (e: Exception) {
+                println("❌ Error categorías: ${e.message}")
                 call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
             }
         }
@@ -83,17 +85,19 @@ fun Route.serviceMgmtRoutes() {
                 var extension = "jpg"
 
                 multipart.forEachPart { part ->
+                    println("📦 Parte recibida: ${part.name}")
                     when (part) {
                         is PartData.FormItem -> {
                             if (part.name == "service") {
-                                // Decodificar el JSON que viene como String en la parte "service"
                                 serviceDTO = Json.decodeFromString<ServiceDTO>(part.value)
+                                println("📄 JSON de servicio decodificado: ${serviceDTO?.nombre}")
                             }
                         }
                         is PartData.FileItem -> {
                             if (part.name == "image") {
                                 imageBytes = part.provider().readRemaining().readByteArray()
                                 extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
+                                println("🖼️ Imagen recibida: ${imageBytes?.size} bytes")
                             }
                         }
                         else -> {}
@@ -102,40 +106,44 @@ fun Route.serviceMgmtRoutes() {
                 }
 
                 if (serviceDTO == null) {
+                    println("❌ Error: serviceDTO es nulo")
                     call.respond(HttpStatusCode.OK, AdminActionResponse(false, "No se recibió la información del servicio"))
                     return@post
                 }
 
-                var finalImageUrl: String? = null
-
-                // 1. Guardar la imagen físicamente si existe
-                if (imageBytes != null && imageBytes!!.isNotEmpty()) {
-                    val uploadDir = java.io.File("uploads/services")
-                    if (!uploadDir.exists()) uploadDir.mkdirs()
-                    
-                    val fileName = "service_${System.currentTimeMillis()}.$extension"
-                    val file = java.io.File(uploadDir, fileName)
-                    file.writeBytes(imageBytes!!)
-                    
-                    finalImageUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/services/$fileName"
-                }
-
-                // 2. Insertar en la Base de Datos
                 transaction {
-                    ServiciosTable.insert {
+                    var finalImageUrl: String? = serviceDTO!!.imagenUrl
+
+                    // 1. Guardar la imagen físicamente si existe
+                    if (imageBytes != null && imageBytes!!.isNotEmpty()) {
+                        val uploadDir = java.io.File("uploads/services")
+                        if (!uploadDir.exists()) uploadDir.mkdirs()
+                        
+                        val fileName = "service_${System.currentTimeMillis()}.$extension"
+                        val file = java.io.File(uploadDir, fileName)
+                        file.writeBytes(imageBytes!!)
+                        
+                        finalImageUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/services/$fileName"
+                        println("💾 Foto guardada en: $finalImageUrl")
+                    }
+
+                    // 2. Insertar en la Base de Datos
+                    val newId = ServiciosTable.insertAndGetId {
                         it[nombre] = serviceDTO!!.nombre
                         it[precio] = serviceDTO!!.precio
                         it[duracion] = serviceDTO!!.duracion
                         it[activo] = serviceDTO!!.activo
                         it[categoriaId] = serviceDTO!!.serviceCategory.id!!
-                        it[imagenUrl] = finalImageUrl ?: serviceDTO!!.imagenUrl
+                        it[imagenUrl] = finalImageUrl
                     }
+                    println("✅ Servicio insertado en BD con ID: ${newId.value}")
                 }
 
-                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Servicio creado con éxito"))
+                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Servicio guardado correctamente en la BD"))
 
             } catch (e: Exception) {
-                println("❌ Error creando servicio multipart: ${e.message}")
+                println("❌ ERROR CRÍTICO creando servicio: ${e.message}")
+                e.printStackTrace()
                 call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error al crear el servicio: ${e.message}"))
             }
         }
