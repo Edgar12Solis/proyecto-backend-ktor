@@ -38,5 +38,6 @@ data class PromotionDTO(
     @SerialName("fecha_inicio") val fechaInicio: String,
     @SerialName("fecha_final") val fechaFinal: String,
     @SerialName("imagen_url") val imagenUrl: String? = null,
-    @SerialName("selected_service_ids") val selectedServiceIds: List<Int>? = null
+    @SerialName("selected_service_ids") val selectedServiceIds: List<Int>? = null,
+    @SerialName("nombre_servicios") val nombreServicios: List<String>? = null // Opcional para mostrar nombres
 )

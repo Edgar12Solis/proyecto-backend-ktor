@@ -212,9 +212,11 @@ fun Route.serviceMgmtRoutes() {
                 val promos = transaction {
                     PromocionesTable.selectAll().map { row ->
                         val promoId = row[PromocionesTable.id].value
-                        val serviceIds = PromocionServiciosTable
+                        val serviceData = (PromocionServiciosTable innerJoin ServiciosTable)
                             .selectAll().where { PromocionServiciosTable.promocionId eq promoId }
-                            .map { it[PromocionServiciosTable.servicioId].value }
+                            .map { 
+                                Pair(it[PromocionServiciosTable.servicioId].value, it[ServiciosTable.nombre])
+                            }
 
                         PromotionDTO(
                             id = promoId,
@@ -226,7 +228,8 @@ fun Route.serviceMgmtRoutes() {
                             fechaInicio = row[PromocionesTable.fechaInicio],
                             fechaFinal = row[PromocionesTable.fechaFinal],
                             imagenUrl = row[PromocionesTable.imagenUrl],
-                            selectedServiceIds = serviceIds
+                            selectedServiceIds = serviceData.map { it.first },
+                            nombreServicios = serviceData.map { it.second }
                         )
                     }
                 }
@@ -260,10 +263,14 @@ fun Route.serviceMgmtRoutes() {
                 if (promoDTO == null) return@post call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Falta info"))
 
                 // VALIDACIÓN DE FECHA: No antes de hoy
-                val today = LocalDate.now()
-                val startDate = LocalDate.parse(promoDTO!!.fechaInicio)
-                if (startDate.isBefore(today)) {
-                    return@post call.respond(HttpStatusCode.OK, AdminActionResponse(false, "La fecha de inicio no puede ser anterior a hoy"))
+                try {
+                    val today = LocalDate.now()
+                    val startDate = LocalDate.parse(promoDTO!!.fechaInicio)
+                    if (startDate.isBefore(today)) {
+                        return@post call.respond(HttpStatusCode.OK, AdminActionResponse(false, "La fecha de inicio no puede ser anterior a hoy ($today)"))
+                    }
+                } catch (e: Exception) {
+                    println("⚠️ Error al parsear fecha: ${promoDTO!!.fechaInicio}")
                 }
 
                 transaction {
@@ -298,7 +305,8 @@ fun Route.serviceMgmtRoutes() {
                 }
                 call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Promoción creada"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
+                e.printStackTrace() // IMPRIMIR EL ERROR EN CONSOLA
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, " Error al crear: ${e.message}"))
             }
         }
 
