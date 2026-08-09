@@ -11,6 +11,7 @@ object ServiciosTable : IntIdTable("servicios") {
     val precio = double("precio")
     val duracion = integer("duracion") // en minutos
     val activo = bool("activo").default(true)
+    val descripcion = text("descripcion").nullable()
     val imagenUrl = varchar("imagen_url", 255).nullable()
     val categoriaId = reference("categoria_id", CategoriasServiciosTable)
 }

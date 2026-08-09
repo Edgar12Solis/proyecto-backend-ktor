@@ -73,6 +73,7 @@ fun Route.serviceMgmtRoutes() {
                                 precio = row[ServiciosTable.precio],
                                 duracion = row[ServiciosTable.duracion],
                                 activo = row[ServiciosTable.activo],
+                                descripcion = row[ServiciosTable.descripcion],
                                 imagenUrl = row[ServiciosTable.imagenUrl],
                                 serviceCategory = ServiceCategoryDTO(
                                     id = row[CategoriasServiciosTable.id].value,
@@ -130,6 +131,7 @@ fun Route.serviceMgmtRoutes() {
                         it[precio] = serviceDTO!!.precio
                         it[duracion] = serviceDTO!!.duracion
                         it[activo] = serviceDTO!!.activo ?: true
+                        it[descripcion] = serviceDTO!!.descripcion
                         it[categoriaId] = serviceDTO!!.serviceCategory.id!!
                         it[imagenUrl] = finalImageUrl
                     }
@@ -181,6 +183,7 @@ fun Route.serviceMgmtRoutes() {
                         it[precio] = serviceDTO!!.precio
                         it[duracion] = serviceDTO!!.duracion
                         it[activo] = serviceDTO!!.activo ?: true
+                        it[descripcion] = serviceDTO!!.descripcion
                         it[categoriaId] = serviceDTO!!.serviceCategory.id!!
                         if (finalImageUrl != null) it[imagenUrl] = finalImageUrl
                     }

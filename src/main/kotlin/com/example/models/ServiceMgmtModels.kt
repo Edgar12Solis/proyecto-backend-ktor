@@ -16,6 +16,7 @@ data class ServiceDTO(
     val precio: Double,
     val duracion: Int,
     val activo: Boolean? = true,
+    val descripcion: String? = null,
     @SerialName("imagen_url") val imagenUrl: String? = null,
     @SerialName("service_category") val serviceCategory: ServiceCategoryDTO
 )
