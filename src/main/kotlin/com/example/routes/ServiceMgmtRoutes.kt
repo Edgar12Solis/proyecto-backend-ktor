@@ -117,7 +117,12 @@ fun Route.serviceMgmtRoutes() {
                         val file = java.io.File("uploads/services/$fileName")
                         file.parentFile.mkdirs()
                         file.writeBytes(imageBytes!!)
-                        finalImageUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/services/$fileName"
+                        val baseUrl = call.request.local.run { "http://$localHost:$localPort" }
+                        // En producción railway suele usar HTTPS y un host específico, pero localHost ayuda en desarrollo.
+                        // Para producción railway, es mejor usar la URL de la app.
+                        val host = call.request.headers["Host"] ?: "localhost:8080"
+                        val scheme = if (host.contains("localhost")) "http" else "https"
+                        finalImageUrl = "$scheme://$host/uploads/services/$fileName"
                     }
 
                     ServiciosTable.insert {
@@ -166,7 +171,9 @@ fun Route.serviceMgmtRoutes() {
                         val file = java.io.File("uploads/services/$fileName")
                         file.parentFile.mkdirs()
                         file.writeBytes(imageBytes!!)
-                        finalImageUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/services/$fileName"
+                        val host = call.request.headers["Host"] ?: "localhost:8080"
+                        val scheme = if (host.contains("localhost")) "http" else "https"
+                        finalImageUrl = "$scheme://$host/uploads/services/$fileName"
                     }
 
                     ServiciosTable.update({ ServiciosTable.id eq id }) {
@@ -245,7 +252,9 @@ fun Route.serviceMgmtRoutes() {
                         val file = java.io.File("uploads/promos/$fileName")
                         file.parentFile.mkdirs()
                         file.writeBytes(imageBytes!!)
-                        finalImageUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/promos/$fileName"
+                        val host = call.request.headers["Host"] ?: "localhost:8080"
+                        val scheme = if (host.contains("localhost")) "http" else "https"
+                        finalImageUrl = "$scheme://$host/uploads/promos/$fileName"
                     }
 
                     val promoId = PromocionesTable.insertAndGetId {
@@ -303,7 +312,9 @@ fun Route.serviceMgmtRoutes() {
                         val file = java.io.File("uploads/promos/$fileName")
                         file.parentFile.mkdirs()
                         file.writeBytes(imageBytes!!)
-                        finalImageUrl = "https://proyecto-backend-ktor-production.up.railway.app/uploads/promos/$fileName"
+                        val host = call.request.headers["Host"] ?: "localhost:8080"
+                        val scheme = if (host.contains("localhost")) "http" else "https"
+                        finalImageUrl = "$scheme://$host/uploads/promos/$fileName"
                     }
 
                     PromocionesTable.update({ PromocionesTable.id eq id }) {

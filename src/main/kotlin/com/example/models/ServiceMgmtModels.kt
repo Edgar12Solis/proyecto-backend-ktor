@@ -17,7 +17,7 @@ data class ServiceDTO(
     val duracion: Int,
     val activo: Boolean? = true,
     @SerialName("imagen_url") val imagenUrl: String? = null,
-    val serviceCategory: ServiceCategoryDTO
+    @SerialName("service_category") val serviceCategory: ServiceCategoryDTO
 )
 
 @Serializable
@@ -37,5 +37,5 @@ data class PromotionDTO(
     @SerialName("fecha_inicio") val fechaInicio: String,
     @SerialName("fecha_final") val fechaFinal: String,
     @SerialName("imagen_url") val imagenUrl: String? = null,
-    val selectedServiceIds: List<Int>? = null
+    @SerialName("selected_service_ids") val selectedServiceIds: List<Int>? = null
 )
