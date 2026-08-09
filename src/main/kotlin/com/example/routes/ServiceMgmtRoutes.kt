@@ -194,13 +194,30 @@ fun Route.serviceMgmtRoutes() {
             }
         }
 
+        delete("/admin/services/{id}") {
+            val id = call.parameters["id"]?.toIntOrNull() ?: return@delete call.respond(HttpStatusCode.BadRequest, "ID inválido")
+            try {
+                transaction {
+                    ServiciosTable.deleteWhere { ServiciosTable.id eq id }
+                }
+                call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Servicio eliminado"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error al eliminar servicio"))
+            }
+        }
+
         // 4. Promociones (Validación de Fecha y snake_case)
         get("/admin/promotions") {
             try {
                 val promos = transaction {
                     PromocionesTable.selectAll().map { row ->
+                        val promoId = row[PromocionesTable.id].value
+                        val serviceIds = PromocionServiciosTable
+                            .selectAll().where { PromocionServiciosTable.promocionId eq promoId }
+                            .map { it[PromocionServiciosTable.servicioId].value }
+
                         PromotionDTO(
-                            id = row[PromocionesTable.id].value,
+                            id = promoId,
                             nombre = row[PromocionesTable.nombre],
                             descripcion = row[PromocionesTable.descripcion],
                             precioOriginal = row[PromocionesTable.precioOriginal],
@@ -208,7 +225,8 @@ fun Route.serviceMgmtRoutes() {
                             activo = row[PromocionesTable.activo],
                             fechaInicio = row[PromocionesTable.fechaInicio],
                             fechaFinal = row[PromocionesTable.fechaFinal],
-                            imagenUrl = row[PromocionesTable.imagenUrl]
+                            imagenUrl = row[PromocionesTable.imagenUrl],
+                            selectedServiceIds = serviceIds
                         )
                     }
                 }
