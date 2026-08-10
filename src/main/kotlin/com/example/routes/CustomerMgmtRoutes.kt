@@ -5,6 +5,7 @@ import com.example.models.*
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
+import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.*
@@ -37,7 +38,66 @@ fun Route.customerMgmtRoutes() {
                 }
                 call.respond(customers)
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, "Error")
+                call.respond(HttpStatusCode.InternalServerError, "Error: ${e.message}")
+            }
+        }
+
+        post("/admin/customers") {
+            try {
+                val req = call.receive<CustomerMgmtDetail>()
+                val result = transaction {
+                    // 1. Crear Usuario
+                    val userId = UsuariosTable.insertAndGetId {
+                        it[nombre] = "${req.nombre} ${req.apellido}"
+                        it[email] = req.correo
+                        it[password] = com.example.plugins.PasswordHasher.hash(req.password ?: "cliente123")
+                        it[rol] = "CLIENTE"
+                        it[fechaRegistro] = java.time.LocalDate.now().toString()
+                    }
+
+                    // 2. Crear Perfil
+                    PerfilesClientesTable.insert {
+                        it[usuarioId] = userId
+                        it[nombres] = req.nombre
+                        it[apellidos] = req.apellido
+                        it[telefono] = req.telefono
+                        it[fechaNacimiento] = req.fecha_cumpleanos
+                        it[direccion] = req.direccion
+                        it[notas] = req.notas
+                        it[estado] = "active"
+                    }
+                    true
+                }
+                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Cliente creado correctamente"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
+            }
+        }
+
+        put("/admin/customers/{id}") {
+            val id = call.parameters["id"]?.toIntOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest, "ID inválido")
+            try {
+                val req = call.receive<CustomerMgmtDetail>()
+                transaction {
+                    // 1. Actualizar Usuario (Email y Nombre completo)
+                    UsuariosTable.update({ UsuariosTable.id eq id }) {
+                        it[nombre] = "${req.nombre} ${req.apellido}"
+                        it[email] = req.correo
+                    }
+
+                    // 2. Actualizar Perfil
+                    PerfilesClientesTable.update({ PerfilesClientesTable.usuarioId eq id }) {
+                        it[nombres] = req.nombre
+                        it[apellidos] = req.apellido
+                        it[telefono] = req.telefono
+                        it[fechaNacimiento] = req.fecha_cumpleanos
+                        it[direccion] = req.direccion
+                        it[notas] = req.notas
+                    }
+                }
+                call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Cliente actualizado"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
             }
         }
 

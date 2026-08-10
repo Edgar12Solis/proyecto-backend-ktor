@@ -1,10 +1,11 @@
 package com.example.models
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 @Serializable
 data class CustomerMgmtStats(
-    val totalGlobal: Int,
+    @SerialName("total_global") val totalGlobal: Int,
     val activos: Int,
     val inactivos: Int
 )
@@ -16,9 +17,10 @@ data class CustomerMgmtDetail(
     val apellido: String,
     val telefono: String,
     val correo: String,
-    val fechaRegistro: String?,
+    @SerialName("fecha_registro") val fechaRegistro: String?,
     val estado: String,
-    val fecha_cumpleanos: String?,
+    @SerialName("fecha_cumpleanos") val fecha_cumpleanos: String?,
     val direccion: String?,
-    val notas: String?
+    val notas: String?,
+    val password: String? = null // Solo para creación
 )
