@@ -12,15 +12,15 @@ data class CustomerMgmtStats(
 
 @Serializable
 data class CustomerMgmtDetail(
-    val id: Int,
+    val id: Int? = null,
     val nombre: String,
     val apellido: String,
     val telefono: String,
     val correo: String,
-    @SerialName("fecha_registro") val fechaRegistro: String?,
-    val estado: String,
-    @SerialName("fecha_cumpleanos") val fecha_cumpleanos: String?,
-    val direccion: String?,
-    val notas: String?,
+    @SerialName("fecha_registro") val fechaRegistro: String? = null,
+    val estado: String? = "active",
+    @SerialName("fecha_cumpleanos") val fecha_cumpleanos: String? = null,
+    val direccion: String? = null,
+    val notas: String? = null,
     val password: String? = null // Solo para creación
 )
