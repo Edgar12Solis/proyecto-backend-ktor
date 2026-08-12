@@ -105,14 +105,21 @@ fun Route.customerMgmtRoutes() {
         get("/admin/customers/stats") {
             try {
                 val stats = transaction {
+                    // Contamos solo usuarios con rol CLIENTE
                     val total = UsuariosTable.selectAll().where { UsuariosTable.rol eq "CLIENTE" }.count().toInt()
-                    val active = PerfilesClientesTable.selectAll().where { PerfilesClientesTable.estado eq "active" }.count().toInt()
+                    
+                    // Contamos perfiles activos que pertenezcan a un usuario CLIENTE
+                    val active = (PerfilesClientesTable innerJoin UsuariosTable)
+                        .selectAll()
+                        .where { (UsuariosTable.rol eq "CLIENTE") and (PerfilesClientesTable.estado eq "active") }
+                        .count().toInt()
+                        
                     val inactive = total - active
                     CustomerMgmtStats(total, active, inactive)
                 }
                 call.respond(stats)
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, "Error")
+                call.respond(HttpStatusCode.InternalServerError, "Error: ${e.message}")
             }
         }
 
