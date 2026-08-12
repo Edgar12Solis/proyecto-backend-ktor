@@ -120,12 +120,13 @@ fun Route.inventoryRoutes() {
                         it[sku] = productDTO!!.sku ?: "WL-SKU-${System.currentTimeMillis()}"
                         it[imagenUrl] = finalImageUrl
                         it[activo] = productDTO!!.activo ?: true
-                        it[categoriaId] = productDTO!!.category.id!!
+                        it[categoriaId] = productDTO!!.category.id ?: 1 // Asegurar ID por defecto o del DTO
                         it[descripcion] = productDTO!!.descripcion
                     }
                 }
-                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Producto creado"))
+                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Producto creado correctamente"))
             } catch (e: Exception) {
+                e.printStackTrace() // Ver error real en consola
                 call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
             }
         }
