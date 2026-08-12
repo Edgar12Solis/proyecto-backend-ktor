@@ -32,7 +32,8 @@ fun Route.customerMgmtRoutes() {
                                 estado = row[PerfilesClientesTable.estado],
                                 fecha_cumpleanos = row[PerfilesClientesTable.fechaNacimiento],
                                 direccion = row[PerfilesClientesTable.direccion],
-                                notas = row[PerfilesClientesTable.notas]
+                                notas = row[PerfilesClientesTable.notas],
+                                imagenUrl = row[UsuariosTable.imagenUrl]
                             )
                         }
                 }

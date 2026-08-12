@@ -22,5 +22,6 @@ data class CustomerMgmtDetail(
     @SerialName("fecha_cumpleanos") val fecha_cumpleanos: String? = null,
     val direccion: String? = null,
     val notas: String? = null,
-    val password: String? = null // Solo para creación
+    val password: String? = null, // Solo para creación
+    @SerialName("imagen_url") val imagenUrl: String? = null
 )
