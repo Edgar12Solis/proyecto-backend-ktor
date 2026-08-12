@@ -93,6 +93,7 @@ fun Route.customerMgmtRoutes() {
                         it[fechaNacimiento] = req.fecha_cumpleanos
                         it[direccion] = req.direccion
                         it[notas] = req.notas
+                        if (req.estado != null) it[estado] = req.estado
                     }
                 }
                 call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Cliente actualizado"))
