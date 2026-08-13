@@ -4,11 +4,15 @@ import com.example.data.*
 import com.example.models.*
 import com.example.plugins.PasswordHasher
 import io.ktor.http.*
+import io.ktor.http.content.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.utils.io.*
+import kotlinx.io.readByteArray
+import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -30,16 +34,19 @@ fun Route.barberMgmtRoutes() {
                                 .selectAll()
                                 .where { BarberoEspecialidadesTable.usuarioId eq bId }
                                 .map { it[CategoriasServiciosTable.nombre] }
+                            
+                            val profile = PerfilesBarberosTable.selectAll().where { PerfilesBarberosTable.usuarioId eq bId }.singleOrNull()
 
                             BarberFullProfileResponse(
                                 id = bId,
                                 nombreCompleto = row[UsuariosTable.nombre],
                                 email = row[UsuariosTable.email],
-                                telefono = row.getOrNull(PerfilesBarberosTable.telefono) ?: "",
-                                bio = row[UsuariosTable.bio] ?: "",
+                                telefono = profile?.get(PerfilesBarberosTable.telefono) ?: "",
+                                bio = profile?.get(PerfilesBarberosTable.biografia) ?: "",
                                 activo = row[UsuariosTable.activo],
                                 scheduleConfiguration = row[UsuariosTable.scheduleConfig] ?: "",
-                                specialties = specs
+                                specialties = specs,
+                                imagenUrl = row[UsuariosTable.imagenUrl]
                             )
                         }
                 }
@@ -49,31 +56,61 @@ fun Route.barberMgmtRoutes() {
             }
         }
 
-        // 2. Crear Barbero (Alineado con DTO del Prompt Maestro)
+        // 2. Crear Barbero (Multipart)
         post("/admin/barbers") {
             try {
-                val req = call.receive<BarberCreateRequest>()
+                val multipart = call.receiveMultipart()
+                var barberDTO: BarberCreateRequest? = null
+                var imageBytes: ByteArray? = null
+                var extension = "jpg"
+
+                multipart.forEachPart { part ->
+                    when (part) {
+                        is PartData.FormItem -> if (part.name == "barber") {
+                            barberDTO = Json { ignoreUnknownKeys = true }.decodeFromString<BarberCreateRequest>(part.value)
+                        }
+                        is PartData.FileItem -> if (part.name == "image") {
+                            imageBytes = part.provider().readRemaining().readByteArray()
+                            extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
+                        }
+                        else -> {}
+                    }
+                    part.dispose()
+                }
+
+                if (barberDTO == null) return@post call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Falta info"))
+
                 transaction {
+                    var finalImageUrl = barberDTO!!.imagenUrl
+                    if (imageBytes != null && imageBytes!!.isNotEmpty()) {
+                        val fileName = "barber_${System.currentTimeMillis()}.$extension"
+                        val file = java.io.File("uploads/barbers/$fileName")
+                        file.parentFile.mkdirs()
+                        file.writeBytes(imageBytes!!)
+                        val host = call.request.headers["Host"] ?: "localhost:8080"
+                        val scheme = if (host.contains("localhost")) "http" else "https"
+                        finalImageUrl = "$scheme://$host/uploads/barbers/$fileName"
+                    }
+
                     val userId = UsuariosTable.insertAndGetId {
-                        it[nombre] = req.nombreCompleto
-                        it[email] = req.email
-                        it[password] = PasswordHasher.hash("barber123")
+                        it[nombre] = barberDTO!!.nombreCompleto
+                        it[email] = barberDTO!!.email
+                        it[password] = PasswordHasher.hash(barberDTO!!.password ?: "barber123")
                         it[rol] = "BARBERO"
-                        it[bio] = req.bio
-                        it[scheduleConfig] = req.scheduleConfiguration
-                        it[activo] = req.activo
-                        it[imagenUrl] = req.imagenUrl
+                        it[bio] = barberDTO!!.bio
+                        it[scheduleConfig] = barberDTO!!.scheduleConfiguration
+                        it[activo] = barberDTO!!.activo
+                        it[imagenUrl] = finalImageUrl
                     }
 
                     PerfilesBarberosTable.insert {
                         it[usuarioId] = userId
-                        it[telefono] = req.telefono
-                        it[especialidad] = req.specialties.firstOrNull() ?: ""
-                        it[biografia] = req.bio
+                        it[telefono] = barberDTO!!.telefono
+                        it[especialidad] = barberDTO!!.specialties.firstOrNull() ?: "General"
+                        it[biografia] = barberDTO!!.bio
                     }
 
-                    // Vincular especialidades por nombre
-                    req.specialties.forEach { specName ->
+                    barberDTO!!.specialties.forEach { specName ->
                         val catId = CategoriasServiciosTable
                             .selectAll()
                             .where { CategoriasServiciosTable.nombre eq specName }
@@ -86,36 +123,75 @@ fun Route.barberMgmtRoutes() {
                             }
                         }
                     }
+                    
+                    // Inicializar horario si se envió
+                    if (barberDTO!!.scheduleConfiguration.isNotEmpty()) {
+                        HorariosBarberosTable.insert {
+                            it[barberoId] = userId
+                            it[config] = barberDTO!!.scheduleConfiguration
+                        }
+                    }
                 }
-                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Barbero creado"))
+                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Barbero creado correctamente"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: \${e.message}"))
+                e.printStackTrace()
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
             }
         }
 
-        // 3. Editar Barbero
+        // 3. Editar Barbero (Multipart)
         put("/admin/barbers/{id}") {
             val id = call.parameters["id"]?.toIntOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest, "ID inválido")
             try {
-                val req = call.receive<BarberCreateRequest>()
+                val multipart = call.receiveMultipart()
+                var barberDTO: BarberCreateRequest? = null
+                var imageBytes: ByteArray? = null
+                var extension = "jpg"
+
+                multipart.forEachPart { part ->
+                    when (part) {
+                        is PartData.FormItem -> if (part.name == "barber") {
+                            barberDTO = Json { ignoreUnknownKeys = true }.decodeFromString<BarberCreateRequest>(part.value)
+                        }
+                        is PartData.FileItem -> if (part.name == "image") {
+                            imageBytes = part.provider().readRemaining().readByteArray()
+                            extension = part.originalFileName?.substringAfterLast('.', "jpg") ?: "jpg"
+                        }
+                        else -> {}
+                    }
+                    part.dispose()
+                }
+
+                if (barberDTO == null) return@put call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Falta info"))
+
                 transaction {
+                    var finalImageUrl: String? = null
+                    if (imageBytes != null && imageBytes!!.isNotEmpty()) {
+                        val fileName = "barber_${System.currentTimeMillis()}.$extension"
+                        val file = java.io.File("uploads/barbers/$fileName")
+                        file.parentFile.mkdirs()
+                        file.writeBytes(imageBytes!!)
+                        val host = call.request.headers["Host"] ?: "localhost:8080"
+                        val scheme = if (host.contains("localhost")) "http" else "https"
+                        finalImageUrl = "$scheme://$host/uploads/barbers/$fileName"
+                    }
+
                     UsuariosTable.update({ UsuariosTable.id eq id }) {
-                        it[nombre] = req.nombreCompleto
-                        it[email] = req.email
-                        it[bio] = req.bio
-                        it[scheduleConfig] = req.scheduleConfiguration
-                        it[activo] = req.activo
-                        it[imagenUrl] = req.imagenUrl
+                        it[nombre] = barberDTO!!.nombreCompleto
+                        it[email] = barberDTO!!.email
+                        it[bio] = barberDTO!!.bio
+                        it[activo] = barberDTO!!.activo
+                        if (finalImageUrl != null) it[imagenUrl] = finalImageUrl
                     }
 
                     PerfilesBarberosTable.update({ PerfilesBarberosTable.usuarioId eq id }) {
-                        it[telefono] = req.telefono
-                        it[especialidad] = req.specialties.firstOrNull() ?: ""
-                        it[biografia] = req.bio
+                        it[telefono] = barberDTO!!.telefono
+                        it[especialidad] = barberDTO!!.specialties.firstOrNull() ?: "General"
+                        it[biografia] = barberDTO!!.bio
                     }
 
                     BarberoEspecialidadesTable.deleteWhere { BarberoEspecialidadesTable.usuarioId eq id }
-                    req.specialties.forEach { specName ->
+                    barberDTO!!.specialties.forEach { specName ->
                         val catId = CategoriasServiciosTable
                             .selectAll()
                             .where { CategoriasServiciosTable.nombre eq specName }
@@ -129,13 +205,55 @@ fun Route.barberMgmtRoutes() {
                         }
                     }
                 }
-                call.respond(AdminActionResponse(true, "Barbero actualizado"))
+                call.respond(AdminActionResponse(true, "Barbero actualizado correctamente"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error"))
+                e.printStackTrace()
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
+            }
+        }
+
+        // 4. Actualizar Horario Específico
+        post("/admin/barbers/{id}/horario") {
+            val id = call.parameters["id"]?.toIntOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, "ID inválido")
+            try {
+                val req = call.receive<BarberScheduleRequest>()
+                transaction {
+                    val exists = HorariosBarberosTable.selectAll().where { HorariosBarberosTable.barberoId eq id }.count() > 0
+                    if (exists) {
+                        HorariosBarberosTable.update({ HorariosBarberosTable.barberoId eq id }) {
+                            it[config] = req.config
+                        }
+                    } else {
+                        HorariosBarberosTable.insert {
+                            it[barberoId] = id
+                            it[config] = req.config
+                        }
+                    }
+                    // También actualizar en UsuariosTable para consistencia
+                    UsuariosTable.update({ UsuariosTable.id eq id }) {
+                        it[scheduleConfig] = req.config
+                    }
+                }
+                call.respond(AdminActionResponse(true, "Horario actualizado con éxito"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error al actualizar horario"))
+            }
+        }
+
+        // 5. Eliminar Barbero (Despido)
+        delete("/admin/barbers/{id}") {
+            val id = call.parameters["id"]?.toIntOrNull() ?: return@delete call.respond(HttpStatusCode.BadRequest, "ID inválido")
+            try {
+                transaction {
+                    UsuariosTable.deleteWhere { UsuariosTable.id eq id }
+                }
+                call.respond(AdminActionResponse(true, "Barbero eliminado permanentemente"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error al eliminar"))
             }
         }
         
-        // 4. Estadísticas
+        // 6. Estadísticas
         get("/admin/barbers/stats") {
             try {
                 val stats = transaction {
