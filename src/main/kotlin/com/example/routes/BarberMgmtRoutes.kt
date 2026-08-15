@@ -92,6 +92,7 @@ fun Route.barberMgmtRoutes() {
                         finalImageUrl = "$scheme://$host/uploads/barbers/$fileName"
                     }
 
+                    // 1. Insertar en UsuariosTable
                     val userId = UsuariosTable.insertAndGetId {
                         it[nombre] = barberDTO!!.nombreCompleto
                         it[email] = barberDTO!!.email
@@ -103,6 +104,7 @@ fun Route.barberMgmtRoutes() {
                         it[imagenUrl] = finalImageUrl
                     }
 
+                    // 2. Insertar en PerfilesBarberosTable
                     PerfilesBarberosTable.insert {
                         it[usuarioId] = userId
                         it[telefono] = barberDTO!!.telefono
@@ -110,21 +112,21 @@ fun Route.barberMgmtRoutes() {
                         it[biografia] = barberDTO!!.bio
                     }
 
+                    // 3. Insertar Especialidades (Si existen)
                     barberDTO!!.specialties.forEach { specName ->
-                        val catId = CategoriasServiciosTable
-                            .selectAll()
-                            .where { CategoriasServiciosTable.nombre eq specName }
-                            .singleOrNull()?.get(CategoriasServiciosTable.id)
+                        val catRow = CategoriasServiciosTable
+                            .selectAll().where { CategoriasServiciosTable.nombre eq specName }
+                            .singleOrNull()
 
-                        if (catId != null) {
+                        if (catRow != null) {
                             BarberoEspecialidadesTable.insert {
                                 it[usuarioId] = userId
-                                it[categoriaId] = catId
+                                it[categoriaId] = catRow[CategoriasServiciosTable.id]
                             }
                         }
                     }
                     
-                    // Inicializar horario si se envió
+                    // 4. Inicializar Horario
                     if (barberDTO!!.scheduleConfiguration.isNotEmpty()) {
                         HorariosBarberosTable.insert {
                             it[barberoId] = userId
@@ -132,10 +134,10 @@ fun Route.barberMgmtRoutes() {
                         }
                     }
                 }
-                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Barbero creado correctamente"))
+                call.respond(HttpStatusCode.Created, AdminActionResponse(true, "Barbero creado con éxito"))
             } catch (e: Exception) {
-                e.printStackTrace()
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
+                e.printStackTrace() // Ver el error real en la consola de Railway
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error al guardar: ${e.message}"))
             }
         }
 
