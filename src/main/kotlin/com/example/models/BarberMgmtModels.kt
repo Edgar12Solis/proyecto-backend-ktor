@@ -1,11 +1,12 @@
 package com.example.models
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 @Serializable
 data class BarberStats(
-    val totalBarbers: Int,
-    val activeBarbers: Int
+    @SerialName("total_barberos") val totalBarbers: Int,
+    @SerialName("barberos_activos") val activeBarbers: Int
 )
 
 @Serializable
@@ -16,24 +17,26 @@ data class BarberScheduleRequest(
 @Serializable
 data class BarberCreateRequest(
     val id: Int? = null,
-    val nombreCompleto: String,
+    @SerialName("nombre_completo") val nombreCompleto: String,
     val telefono: String,
     val email: String,
-    val imagenUrl: String? = null,
+    @SerialName("imagen_url") val imagenUrl: String? = null,
     val activo: Boolean,
     val bio: String,
-    val scheduleConfiguration: String,
-    val specialties: List<String> // Nombres de categorías
+    @SerialName("configuracion_horario") val scheduleConfiguration: String,
+    @SerialName("especialidades") val specialties: List<String>, // Nombres de categorías
+    val password: String? = null // Para creación
 )
 
 @Serializable
 data class BarberFullProfileResponse(
     val id: Int,
-    val nombreCompleto: String,
+    @SerialName("nombre_completo") val nombreCompleto: String,
     val email: String,
     val telefono: String,
     val bio: String,
     val activo: Boolean,
-    val scheduleConfiguration: String,
-    val specialties: List<String>
+    @SerialName("configuracion_horario") val scheduleConfiguration: String,
+    @SerialName("especialidades") val specialties: List<String>,
+    @SerialName("imagen_url") val imagenUrl: String? = null
 )
