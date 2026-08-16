@@ -21,9 +21,9 @@ data class BarberCreateRequest(
     val telefono: String,
     val email: String,
     @SerialName("imagen_url") val imagenUrl: String? = null,
-    val activo: Boolean,
+    val activo: Boolean? = true,
     val bio: String,
-    @SerialName("configuracion_horario") val scheduleConfiguration: String,
+    @SerialName("configuracion_horario") val scheduleConfiguration: String? = "",
     @SerialName("especialidades") val specialties: List<String>, // Nombres de categorías
     val password: String? = null // Para creación
 )

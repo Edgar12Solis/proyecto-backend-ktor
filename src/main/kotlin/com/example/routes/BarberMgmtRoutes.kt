@@ -99,12 +99,11 @@ fun Route.barberMgmtRoutes() {
                         it[password] = PasswordHasher.hash(barberDTO!!.password ?: "barber123")
                         it[rol] = "BARBERO"
                         it[bio] = barberDTO!!.bio
-                        it[scheduleConfig] = barberDTO!!.scheduleConfiguration
-                        it[activo] = barberDTO!!.activo
+                        it[scheduleConfig] = barberDTO!!.scheduleConfiguration ?: ""
+                        it[activo] = barberDTO!!.activo ?: true
                         it[imagenUrl] = finalImageUrl
                     }
 
-                    // 2. Insertar en PerfilesBarberosTable
                     PerfilesBarberosTable.insert {
                         it[usuarioId] = userId
                         it[telefono] = barberDTO!!.telefono
@@ -127,10 +126,11 @@ fun Route.barberMgmtRoutes() {
                     }
                     
                     // 4. Inicializar Horario
-                    if (barberDTO!!.scheduleConfiguration.isNotEmpty()) {
+                    val horario = barberDTO!!.scheduleConfiguration ?: ""
+                    if (horario.isNotEmpty()) {
                         HorariosBarberosTable.insert {
                             it[barberoId] = userId
-                            it[config] = barberDTO!!.scheduleConfiguration
+                            it[config] = horario
                         }
                     }
                 }
