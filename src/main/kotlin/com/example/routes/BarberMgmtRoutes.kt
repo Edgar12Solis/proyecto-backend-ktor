@@ -261,11 +261,12 @@ fun Route.barberMgmtRoutes() {
                 val stats = transaction {
                     val total = UsuariosTable.selectAll().where { UsuariosTable.rol eq "BARBERO" }.count().toInt()
                     val active = UsuariosTable.selectAll().where { (UsuariosTable.rol eq "BARBERO") and (UsuariosTable.activo eq true) }.count().toInt()
-                    BarberStats(total, active)
+                    val off = total - active
+                    BarberStats(total, active, off)
                 }
                 call.respond(stats)
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, "Error")
+                call.respond(HttpStatusCode.InternalServerError, "Error: ${e.message}")
             }
         }
     }

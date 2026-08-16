@@ -6,7 +6,8 @@ import kotlinx.serialization.SerialName
 @Serializable
 data class BarberStats(
     @SerialName("total_barberos") val totalBarbers: Int,
-    @SerialName("barberos_activos") val activeBarbers: Int
+    @SerialName("barberos_activos") val activeBarbers: Int,
+    @SerialName("barberos_off") val offBarbers: Int
 )
 
 @Serializable
