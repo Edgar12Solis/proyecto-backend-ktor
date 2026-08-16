@@ -182,7 +182,7 @@ fun Route.barberMgmtRoutes() {
                         it[nombre] = barberDTO!!.nombreCompleto
                         it[email] = barberDTO!!.email
                         it[bio] = barberDTO!!.bio
-                        it[activo] = barberDTO!!.activo
+                        it[activo] = barberDTO!!.activo ?: true
                         if (finalImageUrl != null) it[imagenUrl] = finalImageUrl
                     }
 
