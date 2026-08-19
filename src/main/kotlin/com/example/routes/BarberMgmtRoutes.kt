@@ -183,6 +183,7 @@ fun Route.barberMgmtRoutes() {
                         it[email] = barberDTO!!.email
                         it[bio] = barberDTO!!.bio
                         it[activo] = barberDTO!!.activo ?: true
+                        it[scheduleConfig] = barberDTO!!.scheduleConfiguration ?: ""
                         if (finalImageUrl != null) it[imagenUrl] = finalImageUrl
                     }
 
