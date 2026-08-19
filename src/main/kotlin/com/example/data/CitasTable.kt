@@ -9,6 +9,8 @@ object CitasTable : IntIdTable("citas") {
     val serviceName = varchar("service_name", 100)
     val date = varchar("date", 50)
     val startTime = varchar("start_time", 20)
+    val duracion = integer("duracion").default(30) // En minutos
     val totalPrice = double("total_price")
     val status = varchar("status", 20) // 'Programada', 'Completada', 'Cancelada'
+    val metodoPago = varchar("metodo_pago", 50).nullable() // 'Efectivo', 'Tarjeta'
 }
