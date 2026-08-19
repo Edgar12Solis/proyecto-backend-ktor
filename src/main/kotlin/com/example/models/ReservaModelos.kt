@@ -31,3 +31,25 @@ data class ReservaCreateRequest(
     val precio: Double,
     @SerialName("metodo_pago") val metodoPago: String
 )
+
+@Serializable
+data class CitaDetalleDTO(
+    val id: Int,
+    @SerialName("cliente_nombre") val clienteNombre: String,
+    @SerialName("barbero_nombre") val barberoNombre: String,
+    @SerialName("servicio_nombre") val servicioNombre: String,
+    val fecha: String,
+    @SerialName("hora_inicio") val horaInicio: String,
+    val duracion: Int,
+    val precio: Double,
+    val estado: String,
+    @SerialName("metodo_pago") val metodoPago: String?
+)
+
+@Serializable
+data class CitaReprogramarRequest(
+    val fecha: String,
+    @SerialName("hora_inicio") val horaInicio: String,
+    @SerialName("barbero_id") val barberoId: Int? = null
+)
+
