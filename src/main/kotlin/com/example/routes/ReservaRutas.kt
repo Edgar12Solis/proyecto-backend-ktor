@@ -161,7 +161,9 @@ fun Route.reservaRutas() {
 
         // 4. Listar citas por día (Vista Agenda)
         get("/admin/citas/dia") {
-            val fecha = call.request.queryParameters["fecha"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Falta fecha")
+            val fechaRaw = call.request.queryParameters["fecha"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Falta fecha")
+            val fecha = fechaRaw.trim() // Limpiar espacios ocultos
+            
             try {
                 val citas = transaction {
                     val clienteAlias = UsuariosTable.alias("cliente")
@@ -171,7 +173,7 @@ fun Route.reservaRutas() {
                         .join(clienteAlias, JoinType.INNER, additionalConstraint = { CitasTable.usuarioId eq clienteAlias[UsuariosTable.id] })
                         .join(barberoAlias, JoinType.INNER, additionalConstraint = { CitasTable.barberoId eq barberoAlias[UsuariosTable.id] })
                         .selectAll()
-                        .where { CitasTable.date eq fecha }
+                        .where { CitasTable.date.trim() eq fecha }
                         .map { row ->
                             CitaDetalleDTO(
                                 id = row[CitasTable.id].value,
@@ -187,11 +189,12 @@ fun Route.reservaRutas() {
                             )
                         }
                 }
-                println("📅 Citas encontradas para $fecha: ${citas.size}")
+                println("📅 CONSULTA AGENDA - Fecha: '$fecha' | Citas encontradas: ${citas.size}")
                 call.respond(citas)
             } catch (e: Exception) {
+                println("❌ ERROR AGENDA: ${e.message}")
                 e.printStackTrace()
-                call.respond(HttpStatusCode.InternalServerError, "Error al obtener citas: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, "Error")
             }
         }
 
@@ -207,7 +210,7 @@ fun Route.reservaRutas() {
                         .join(clienteAlias, JoinType.INNER, additionalConstraint = { CitasTable.usuarioId eq clienteAlias[UsuariosTable.id] })
                         .join(barberoAlias, JoinType.INNER, additionalConstraint = { CitasTable.barberoId eq barberoAlias[UsuariosTable.id] })
                         .selectAll()
-                        .where { (CitasTable.date eq hoy) and (CitasTable.status.lowerCase() eq "programada") }
+                        .where { CitasTable.date.trim() eq hoy }
                         .map { row ->
                             CitaDetalleDTO(
                                 id = row[CitasTable.id].value,
@@ -223,10 +226,11 @@ fun Route.reservaRutas() {
                             )
                         }
                 }
+                println("📅 PENDIENTES HOY - Fecha: '$hoy' | Cantidad: ${citas.size}")
                 call.respond(citas)
             } catch (e: Exception) {
-                e.printStackTrace()
-                call.respond(HttpStatusCode.InternalServerError, "Error: ${e.message}")
+                println("❌ ERROR PENDIENTES: ${e.message}")
+                call.respond(HttpStatusCode.InternalServerError, "Error")
             }
         }
 
