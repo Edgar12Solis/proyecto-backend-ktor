@@ -44,7 +44,6 @@ fun Route.reservaRutas() {
                         if (horarioConfig.isEmpty()) return@filter false
 
                         // El formato de horarioConfig es "1-10:00,2-10:30,..." (DiaID-Hora)
-                        // Extraemos solo las horas para simplificar la validación de bloques
                         val bloquesDisponibles = horarioConfig.split(",").map { it.substringAfter("-") }
                         
                         // El barbero debe tener el bloque de inicio disponible
@@ -75,42 +74,6 @@ fun Route.reservaRutas() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, "Error al calcular disponibilidad")
-            }
-        }
-
-        // 3. NUEVO: Obtener bloques de horarios generales disponibles (para llenar el selector de horas)
-        get("/admin/reservas/horarios-disponibles") {
-            val fecha = call.request.queryParameters["fecha"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Falta fecha")
-            val duracion = call.request.queryParameters["duracion"]?.toIntOrNull() ?: 30
-            
-            try {
-                val todosLosBloques = listOf(
-                    "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
-                    "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
-                    "16:00", "16:30", "17:00", "17:30", "18:00", "18:30",
-                    "19:00", "19:30", "20:00"
-                )
-
-                val horariosConBarberos = transaction {
-                    val barberosActivos = UsuariosTable.selectAll()
-                        .where { (UsuariosTable.rol eq "BARBERO") and (UsuariosTable.activo eq true) }
-                        .map { it[UsuariosTable.id].value }
-
-                    val horariosBarberos = HorariosBarberosTable.selectAll()
-                        .where { HorariosBarberosTable.barberoId inList barberosActivos }
-                        .map { it[HorariosBarberosTable.barberoId] to it[HorariosBarberosTable.config] }
-
-                    todosLosBloques.filter { bloque ->
-                        // Un bloque es válido si al menos un barbero lo tiene en su horario y no tiene cita
-                        horariosBarberos.any { (bId, config) ->
-                            config.contains(bloque) // Simplificado: el barbero trabaja en ese bloque
-                        }
-                    }
-                }
-                
-                call.respond(horariosConBarberos)
-            } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, "Error al obtener horarios")
             }
         }
 
@@ -162,6 +125,145 @@ fun Route.reservaRutas() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error al agendar: ${e.message}"))
+            }
+        }
+
+        // 3. Listar bloques de horarios generales disponibles
+        get("/admin/reservas/horarios-disponibles") {
+            val fecha = call.request.queryParameters["fecha"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Falta fecha")
+            
+            try {
+                val todosLosBloques = listOf(
+                    "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
+                    "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
+                    "16:00", "16:30", "17:00", "17:30", "18:00", "18:30",
+                    "19:00", "19:30", "20:00"
+                )
+
+                val horariosConBarberos = transaction {
+                    val barberosActivos = UsuariosTable.selectAll()
+                        .where { (UsuariosTable.rol eq "BARBERO") and (UsuariosTable.activo eq true) }
+                        .map { it[UsuariosTable.id].value }
+
+                    val horariosBarberos = HorariosBarberosTable.selectAll()
+                        .where { HorariosBarberosTable.barberoId inList barberosActivos }
+                        .map { it[HorariosBarberosTable.config] }
+
+                    todosLosBloques.filter { bloque ->
+                        horariosBarberos.any { config -> config.contains(bloque) }
+                    }
+                }
+                call.respond(horariosConBarberos)
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, "Error")
+            }
+        }
+
+        // 4. Listar citas por día (Vista Agenda)
+        get("/admin/citas/dia") {
+            val fecha = call.request.queryParameters["fecha"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Falta fecha")
+            try {
+                val citas = transaction {
+                    val clienteAlias = UsuariosTable.alias("cliente")
+                    val barberoAlias = UsuariosTable.alias("barbero")
+
+                    CitasTable
+                        .join(clienteAlias, JoinType.INNER, additionalConstraint = { CitasTable.usuarioId eq clienteAlias[UsuariosTable.id] })
+                        .join(barberoAlias, JoinType.INNER, additionalConstraint = { CitasTable.barberoId eq barberoAlias[UsuariosTable.id] })
+                        .selectAll()
+                        .where { CitasTable.date eq fecha }
+                        .map { row ->
+                            CitaDetalleDTO(
+                                id = row[CitasTable.id].value,
+                                clienteNombre = row[clienteAlias[UsuariosTable.nombre]],
+                                barberoNombre = row[barberoAlias[UsuariosTable.nombre]],
+                                servicioNombre = row[CitasTable.serviceName],
+                                fecha = row[CitasTable.date],
+                                horaInicio = row[CitasTable.startTime],
+                                duracion = row[CitasTable.duracion],
+                                precio = row[CitasTable.totalPrice],
+                                estado = row[CitasTable.status],
+                                metodoPago = row[CitasTable.metodoPago]
+                            )
+                        }
+                }
+                println("📅 Citas encontradas para $fecha: ${citas.size}")
+                call.respond(citas)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, "Error al obtener citas: ${e.message}")
+            }
+        }
+
+        // 5. Pendientes de hoy (Panel Inferior)
+        get("/admin/citas/pendientes-hoy") {
+            val hoy = java.time.LocalDate.now().toString()
+            try {
+                val citas = transaction {
+                    val clienteAlias = UsuariosTable.alias("cliente")
+                    val barberoAlias = UsuariosTable.alias("barbero")
+
+                    CitasTable
+                        .join(clienteAlias, JoinType.INNER, additionalConstraint = { CitasTable.usuarioId eq clienteAlias[UsuariosTable.id] })
+                        .join(barberoAlias, JoinType.INNER, additionalConstraint = { CitasTable.barberoId eq barberoAlias[UsuariosTable.id] })
+                        .selectAll()
+                        .where { (CitasTable.date eq hoy) and (CitasTable.status.lowerCase() eq "programada") }
+                        .map { row ->
+                            CitaDetalleDTO(
+                                id = row[CitasTable.id].value,
+                                clienteNombre = row[clienteAlias[UsuariosTable.nombre]],
+                                barberoNombre = row[barberoAlias[UsuariosTable.nombre]],
+                                servicioNombre = row[CitasTable.serviceName],
+                                fecha = row[CitasTable.date],
+                                horaInicio = row[CitasTable.startTime],
+                                duracion = row[CitasTable.duracion],
+                                precio = row[CitasTable.totalPrice],
+                                estado = row[CitasTable.status],
+                                metodoPago = row[CitasTable.metodoPago]
+                            )
+                        }
+                }
+                call.respond(citas)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, "Error: ${e.message}")
+            }
+        }
+
+        // 6. Cambiar Estado (Completar/Cancelar)
+        post("/admin/citas/{id}/estado") {
+            val id = call.parameters["id"]?.toIntOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, "ID inválido")
+            val req = call.receive<Map<String, String>>()
+            val nuevoEstado = req["estado"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Falta estado")
+
+            try {
+                transaction {
+                    CitasTable.update({ CitasTable.id eq id }) {
+                        it[status] = nuevoEstado
+                    }
+                }
+                call.respond(AdminActionResponse(true, "Estado actualizado: $nuevoEstado"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error"))
+            }
+        }
+
+        // 7. Reprogramar Cita
+        put("/admin/citas/{id}/reprogramar") {
+            val id = call.parameters["id"]?.toIntOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest, "ID inválido")
+            try {
+                val req = call.receive<CitaReprogramarRequest>()
+                transaction {
+                    CitasTable.update({ CitasTable.id eq id }) {
+                        it[date] = req.fecha
+                        it[startTime] = req.horaInicio
+                        if (req.barberoId != null) it[barberoId] = req.barberoId
+                        it[status] = "Programada"
+                    }
+                }
+                call.respond(AdminActionResponse(true, "Cita reprogramada con éxito"))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error"))
             }
         }
     }
