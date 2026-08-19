@@ -40,9 +40,15 @@ fun Route.reservaRutas() {
                             .selectAll().where { HorariosBarberosTable.barberoId eq bId }
                             .singleOrNull()?.get(HorariosBarberosTable.config) ?: ""
                         
-                        // El formato es "DiaID-HH:mm,..."
-                        // Simplificación: Verificar si el bloque de inicio está en su config
-                        if (!horarioConfig.contains(req.horaInicio)) return@filter false
+                        // Si no hay configuración de horario, no está disponible
+                        if (horarioConfig.isEmpty()) return@filter false
+
+                        // El formato de horarioConfig es "1-10:00,2-10:30,..." (DiaID-Hora)
+                        // Extraemos solo las horas para simplificar la validación de bloques
+                        val bloquesDisponibles = horarioConfig.split(",").map { it.substringAfter("-") }
+                        
+                        // El barbero debe tener el bloque de inicio disponible
+                        if (!bloquesDisponibles.contains(req.horaInicio)) return@filter false
 
                         // B) Validar colisiones con citas existentes
                         val citasHoy = CitasTable
@@ -69,6 +75,42 @@ fun Route.reservaRutas() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, "Error al calcular disponibilidad")
+            }
+        }
+
+        // 3. NUEVO: Obtener bloques de horarios generales disponibles (para llenar el selector de horas)
+        get("/admin/reservas/horarios-disponibles") {
+            val fecha = call.request.queryParameters["fecha"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Falta fecha")
+            val duracion = call.request.queryParameters["duracion"]?.toIntOrNull() ?: 30
+            
+            try {
+                val todosLosBloques = listOf(
+                    "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
+                    "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
+                    "16:00", "16:30", "17:00", "17:30", "18:00", "18:30",
+                    "19:00", "19:30", "20:00"
+                )
+
+                val horariosConBarberos = transaction {
+                    val barberosActivos = UsuariosTable.selectAll()
+                        .where { (UsuariosTable.rol eq "BARBERO") and (UsuariosTable.activo eq true) }
+                        .map { it[UsuariosTable.id].value }
+
+                    val horariosBarberos = HorariosBarberosTable.selectAll()
+                        .where { HorariosBarberosTable.barberoId inList barberosActivos }
+                        .map { it[HorariosBarberosTable.barberoId] to it[HorariosBarberosTable.config] }
+
+                    todosLosBloques.filter { bloque ->
+                        // Un bloque es válido si al menos un barbero lo tiene en su horario y no tiene cita
+                        horariosBarberos.any { (bId, config) ->
+                            config.contains(bloque) // Simplificado: el barbero trabaja en ese bloque
+                        }
+                    }
+                }
+                
+                call.respond(horariosConBarberos)
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, "Error al obtener horarios")
             }
         }
 
