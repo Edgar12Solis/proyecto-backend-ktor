@@ -204,6 +204,7 @@ fun Route.reservaRutas() {
                         .where { CitasTable.date.trim() eq fecha }
                         .orderBy(CitasTable.startTime to SortOrder.ASC) // Ordenar por hora
                         .map { row ->
+                            val statusActual = row[CitasTable.status]
                             CitaDetalleDTO(
                                 id = row[CitasTable.id].value,
                                 clienteNombre = row[clienteAlias[UsuariosTable.nombre]],
@@ -213,11 +214,12 @@ fun Route.reservaRutas() {
                                 horaInicio = row[CitasTable.startTime],
                                 duracion = row[CitasTable.duracion],
                                 precio = row[CitasTable.totalPrice],
-                                estado = row[CitasTable.status],
+                                estado = statusActual,
                                 metodoPago = row[CitasTable.metodoPago]
                             )
                         }
                 }
+                println("📅 CONSULTA AGENDA - Fecha: '$fecha' | Citas enviadas: ${citas.map { "${it.id}: ${it.estado}" }}")
                 call.respond(citas)
             } catch (e: Exception) {
                 call.respond(HttpStatusCode.InternalServerError, "Error")
