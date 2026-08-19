@@ -128,41 +128,69 @@ fun Route.reservaRutas() {
             }
         }
 
-        // 3. Listar bloques de horarios generales disponibles
+        // 3. Listar bloques de horarios generales disponibles (Filtrado Inteligente)
         get("/admin/reservas/horarios-disponibles") {
             val fecha = call.request.queryParameters["fecha"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Falta fecha")
+            val duracionStr = call.request.queryParameters["duracion"] ?: "30"
+            val duracion = duracionStr.toIntOrNull() ?: 30
             
             try {
+                val formatter = DateTimeFormatter.ofPattern("HH:mm")
                 val todosLosBloques = listOf(
                     "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
                     "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
                     "16:00", "16:30", "17:00", "17:30", "18:00", "18:30",
-                    "19:00", "19:30", "20:00"
+                    "19:00", "19:30"
                 )
 
-                val horariosConBarberos = transaction {
+                val horariosFinales = transaction {
                     val barberosActivos = UsuariosTable.selectAll()
                         .where { (UsuariosTable.rol eq "BARBERO") and (UsuariosTable.activo eq true) }
                         .map { it[UsuariosTable.id].value }
 
-                    val horariosBarberos = HorariosBarberosTable.selectAll()
+                    val configsBarberos = HorariosBarberosTable.selectAll()
                         .where { HorariosBarberosTable.barberoId inList barberosActivos }
-                        .map { it[HorariosBarberosTable.config] }
+                        .map { it[HorariosBarberosTable.barberoId] to it[HorariosBarberosTable.config] }
+
+                    val citasDelDia = CitasTable.selectAll()
+                        .where { (CitasTable.date eq fecha) and (CitasTable.status eq "Programada") }
+                        .map { 
+                            Triple(
+                                it[CitasTable.barberoId], 
+                                LocalTime.parse(it[CitasTable.startTime], formatter), 
+                                it[CitasTable.duracion]
+                            ) 
+                        }
 
                     todosLosBloques.filter { bloque ->
-                        horariosBarberos.any { config -> config.contains(bloque) }
+                        val requestedStart = LocalTime.parse(bloque, formatter)
+                        val requestedEnd = requestedStart.plusMinutes(duracion.toLong())
+
+                        // Un bloque es disponible si al menos UN barbero está libre
+                        configsBarberos.any { (bId, config) ->
+                            // 1. ¿El barbero trabaja en este bloque?
+                            if (!config.contains(bloque)) return@any false
+
+                            // 2. ¿Tiene alguna cita que choque?
+                            val tieneChoque = citasDelDia.filter { it.first == bId }.any { (_, citaStart, citaDur) ->
+                                val citaEnd = citaStart.plusMinutes(citaDur.toLong())
+                                requestedStart.isBefore(citaEnd) && citaStart.isBefore(requestedEnd)
+                            }
+                            !tieneChoque
+                        }
                     }
                 }
-                call.respond(horariosConBarberos)
+                call.respond(horariosFinales)
             } catch (e: Exception) {
+                e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, "Error")
             }
         }
 
-        // 4. Listar citas por día (Vista Agenda)
+        // 4. Listar citas por día (Vista Agenda - MUESTRA TODOS LOS ESTADOS)
         get("/admin/citas/dia") {
             val fechaRaw = call.request.queryParameters["fecha"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Falta fecha")
-            val fecha = fechaRaw.trim() // Limpiar espacios ocultos
+            val fecha = fechaRaw.trim()
             
             try {
                 val citas = transaction {
@@ -174,6 +202,7 @@ fun Route.reservaRutas() {
                         .join(barberoAlias, JoinType.INNER, additionalConstraint = { CitasTable.barberoId eq barberoAlias[UsuariosTable.id] })
                         .selectAll()
                         .where { CitasTable.date.trim() eq fecha }
+                        .orderBy(CitasTable.startTime to SortOrder.ASC) // Ordenar por hora
                         .map { row ->
                             CitaDetalleDTO(
                                 id = row[CitasTable.id].value,
@@ -189,11 +218,8 @@ fun Route.reservaRutas() {
                             )
                         }
                 }
-                println("📅 CONSULTA AGENDA - Fecha: '$fecha' | Citas encontradas: ${citas.size}")
                 call.respond(citas)
             } catch (e: Exception) {
-                println("❌ ERROR AGENDA: ${e.message}")
-                e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, "Error")
             }
         }
