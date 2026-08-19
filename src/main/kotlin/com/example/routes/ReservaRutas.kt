@@ -214,12 +214,12 @@ fun Route.reservaRutas() {
                                 horaInicio = row[CitasTable.startTime],
                                 duracion = row[CitasTable.duracion],
                                 precio = row[CitasTable.totalPrice],
-                                estado = statusActual,
+                                status = statusActual,
                                 metodoPago = row[CitasTable.metodoPago]
                             )
                         }
                 }
-                println("📅 CONSULTA AGENDA - Fecha: '$fecha' | Citas enviadas: ${citas.map { "${it.id}: ${it.estado}" }}")
+                println("📅 CONSULTA AGENDA - Fecha: '$fecha' | Citas enviadas: ${citas.map { "${it.id}: ${it.status}" }}")
                 call.respond(citas)
             } catch (e: Exception) {
                 call.respond(HttpStatusCode.InternalServerError, "Error")
@@ -249,7 +249,7 @@ fun Route.reservaRutas() {
                                 horaInicio = row[CitasTable.startTime],
                                 duracion = row[CitasTable.duracion],
                                 precio = row[CitasTable.totalPrice],
-                                estado = row[CitasTable.status],
+                                status = row[CitasTable.status],
                                 metodoPago = row[CitasTable.metodoPago]
                             )
                         }

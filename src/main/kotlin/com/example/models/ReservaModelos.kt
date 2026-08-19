@@ -42,7 +42,7 @@ data class CitaDetalleDTO(
     @SerialName("hora_inicio") val horaInicio: String,
     val duracion: Int,
     val precio: Double,
-    val estado: String,
+    val status: String, // Cambiado de estado a status para consistencia
     @SerialName("metodo_pago") val metodoPago: String?
 )
 
