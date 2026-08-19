@@ -265,18 +265,25 @@ fun Route.reservaRutas() {
         // 6. Cambiar Estado (Completar/Cancelar)
         post("/admin/citas/{id}/estado") {
             val id = call.parameters["id"]?.toIntOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, "ID inválido")
-            val req = call.receive<Map<String, String>>()
-            val nuevoEstado = req["estado"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Falta estado")
+            val req = try { call.receive<Map<String, String>>() } catch (e: Exception) { null }
+            val nuevoEstado = req?.get("status") ?: req?.get("estado") ?: return@post call.respond(HttpStatusCode.BadRequest, "Falta estado/status")
 
             try {
-                transaction {
+                val actualizado = transaction {
                     CitasTable.update({ CitasTable.id eq id }) {
                         it[status] = nuevoEstado
                     }
                 }
-                call.respond(AdminActionResponse(true, "Estado actualizado: $nuevoEstado"))
+                println("✅ ESTADO ACTUALIZADO - ID: $id | Nuevo Estado: $nuevoEstado | Filas afectadas: $actualizado")
+                
+                if (actualizado > 0) {
+                    call.respond(AdminActionResponse(true, "Estado actualizado a $nuevoEstado"))
+                } else {
+                    call.respond(HttpStatusCode.NotFound, AdminActionResponse(false, "No se encontró la cita $id"))
+                }
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error"))
+                e.printStackTrace()
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
             }
         }
 
