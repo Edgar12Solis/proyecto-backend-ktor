@@ -42,6 +42,7 @@ fun main() {
             serviceMgmtRoutes()
             reportRoutes()
             customerMgmtRoutes()
+            reservaRutas()
 
             // Servir fotos de perfil de forma profesional
             staticFiles("/uploads", File("uploads"))
