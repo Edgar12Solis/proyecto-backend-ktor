@@ -122,9 +122,10 @@ fun Route.adminRoutes() {
                                 apellido = row.getOrNull(PerfilesClientesTable.apellidos) ?: "",
                                 telefono = row.getOrNull(PerfilesClientesTable.telefono) ?: ""
                             ),
-                            date = row[CitasTable.date],
-                            startTime = row[CitasTable.startTime],
+                            fecha = row[CitasTable.date],
+                            horaInicio = row[CitasTable.startTime],
                             status = row[CitasTable.status],
+                            totalPrecio = row[CitasTable.totalPrice],
                             service = AdminServiceInfo(
                                 nombre = row[CitasTable.serviceName],
                                 precio = row[CitasTable.totalPrice]
@@ -141,21 +142,48 @@ fun Route.adminRoutes() {
             }
         }
 
-        // 4. Actualizar Estado de Cita
+        // 4. Actualizar Estado de Cita (Validación de Propiedad para Barbero)
         post("/admin/appointments/{id}/status") {
             val id = call.parameters["id"]?.toIntOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, "ID inválido")
             val req = call.receive<Map<String, String>>()
             val newStatus = req["status"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Falta status")
+            
+            val allowedStatuses = listOf("confirmed", "completed", "cancelled", "pending")
+            if (!allowedStatuses.contains(newStatus)) {
+                return@post call.respond(HttpStatusCode.BadRequest, AdminActionResponse(false, "Estado no permitido"))
+            }
+
+            val principal = call.principal<JWTPrincipal>()
+            val email = principal?.payload?.getClaim("email")?.asString() ?: ""
 
             try {
-                transaction {
+                val result = transaction {
+                    val user = UsuariosTable.selectAll().where { UsuariosTable.email eq email }.single()
+                    val userRole = user[UsuariosTable.rol]
+                    val userId = user[UsuariosTable.id].value
+
+                    val appointment = CitasTable.selectAll().where { CitasTable.id eq id }.singleOrNull()
+                    if (appointment == null) return@transaction "NOT_FOUND"
+
+                    // Validar si es Barbero y la cita es suya
+                    if (userRole == "BARBERO" && appointment[CitasTable.barberoId].value != userId) {
+                        return@transaction "FORBIDDEN"
+                    }
+
                     CitasTable.update({ CitasTable.id eq id }) {
                         it[status] = newStatus
                     }
+                    "OK"
                 }
-                call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Estado de cita actualizado"))
+
+                when (result) {
+                    "OK" -> call.respond(HttpStatusCode.OK, AdminActionResponse(true, "Estado de cita actualizado"))
+                    "FORBIDDEN" -> call.respond(HttpStatusCode.Forbidden, AdminActionResponse(false, "No tienes permiso para modificar esta cita"))
+                    "NOT_FOUND" -> call.respond(HttpStatusCode.NotFound, AdminActionResponse(false, "Cita no encontrada"))
+                    else -> call.respond(HttpStatusCode.InternalServerError, AdminActionResponse(false, "Error desconocido"))
+                }
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, AdminActionResponse(false, "Error"))
+                call.respond(HttpStatusCode.InternalServerError, AdminActionResponse(false, "Error: ${e.message}"))
             }
         }
 
@@ -176,10 +204,20 @@ fun Route.adminRoutes() {
             }
         }
 
-        // 6. Listar Clientes (Para directorio de barbero)
+        // 6. Listar Clientes (Permitir a BARBERO y ADMIN)
         get("/admin/customers") {
+            val principal = call.principal<JWTPrincipal>()
+            val email = principal?.payload?.getClaim("email")?.asString() ?: ""
+            
             try {
                 val customers = transaction {
+                    val user = UsuariosTable.selectAll().where { UsuariosTable.email eq email }.single()
+                    val userRole = user[UsuariosTable.rol]
+
+                    if (userRole != "ADMIN" && userRole != "BARBERO") {
+                        throw Exception("No autorizado")
+                    }
+
                     (UsuariosTable innerJoin PerfilesClientesTable)
                         .selectAll()
                         .where { UsuariosTable.rol eq "CLIENTE" }
@@ -200,7 +238,8 @@ fun Route.adminRoutes() {
                 }
                 call.respond(customers)
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.InternalServerError, "Error")
+                if (e.message == "No autorizado") call.respond(HttpStatusCode.Forbidden, "No tienes permiso")
+                else call.respond(HttpStatusCode.InternalServerError, "Error")
             }
         }
     }

@@ -25,11 +25,12 @@ data class AdminBarberInfo(
 data class AdminAppointmentResponse(
     val id: Int,
     val customer: AdminCustomerInfo,
-    val date: String,
-    @SerialName("start_time") val startTime: String,
+    val fecha: String,
+    @SerialName("hora_inicio") val horaInicio: String,
     val status: String,
-    val service: AdminServiceInfo,
-    val barber: AdminBarberInfo
+    @SerialName("total_precio") val totalPrecio: Double,
+    val service: AdminServiceInfo? = null,
+    val barber: AdminBarberInfo? = null
 )
 
 @Serializable
