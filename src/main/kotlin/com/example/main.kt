@@ -44,6 +44,7 @@ fun main() {
             customerMgmtRoutes()
             reservaRutas()
             ventaExpressRutas()
+            dashboardRutas()
 
             // Servir fotos de perfil de forma profesional
             staticFiles("/uploads", File("uploads"))
