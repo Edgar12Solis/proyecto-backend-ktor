@@ -15,9 +15,11 @@ data class ClienteCitaHistorial(
 
 @Serializable
 data class ClienteReservaRequest(
-    @SerialName("barber_id") val barberoId: Int,
+    @SerialName("barber_id") val barberoId: Int? = null,
+    @SerialName("barber_name") val barberoNombre: String? = null,
     @SerialName("service_id") val servicioId: Int? = null,
+    @SerialName("service_name") val servicioNombre: String? = null,
     @SerialName("promotion_id") val promocionId: Int? = null,
-    val fecha: String,
-    @SerialName("hora_inicio") val horaInicio: String
+    val fecha: String? = null,
+    @SerialName("hora_inicio") val horaInicio: String? = null
 )
