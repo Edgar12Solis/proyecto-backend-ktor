@@ -138,7 +138,7 @@ fun Route.clienteRutas() {
                         it[startTime] = req.horaInicio ?: "10:00"
                         it[duracion] = duracionServicio
                         it[totalPrice] = precioServicio
-                        it[status] = "Programada"
+                        it[status] = "pending"
                         it[metodoPago] = "Efectivo" // Por defecto como pediste
                     }
                 }
