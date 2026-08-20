@@ -99,38 +99,53 @@ fun Route.clienteRutas() {
                 transaction {
                     val userId = UsuariosTable.selectAll().where { UsuariosTable.email eq email }.single()[UsuariosTable.id].value
                     
-                    var nombreServicio = "Servicio Especial"
+                    var nombreServicio = req.servicioNombre ?: "Servicio Especial"
                     var precioServicio = 0.0
                     var duracionServicio = 30
+                    var finalBarberoId = req.barberoId
 
-                    if (req.servicioId != null) {
-                        val s = ServiciosTable.selectAll().where { ServiciosTable.id eq req.servicioId }.single()
-                        nombreServicio = s[ServiciosTable.nombre]
-                        precioServicio = s[ServiciosTable.precio]
-                        duracionServicio = s[ServiciosTable.duracion]
-                    } else if (req.promocionId != null) {
-                        val p = PromocionesTable.selectAll().where { PromocionesTable.id eq req.promocionId }.single()
-                        nombreServicio = p[PromocionesTable.nombre]
-                        precioServicio = p[PromocionesTable.precioPromocional]
-                        duracionServicio = 60 // Duración base para promociones
+                    // A) Resolver ID de Barbero si solo mandan el nombre
+                    if (finalBarberoId == null && req.barberoNombre != null) {
+                        finalBarberoId = UsuariosTable.selectAll()
+                            .where { (UsuariosTable.nombre eq req.barberoNombre!!) and (UsuariosTable.rol eq "BARBERO") }
+                            .singleOrNull()?.get(UsuariosTable.id)?.value
                     }
+
+                    // B) Resolver datos del servicio
+                    if (req.servicioId != null) {
+                        val s = ServiciosTable.selectAll().where { ServiciosTable.id eq req.servicioId }.singleOrNull()
+                        if (s != null) {
+                            nombreServicio = s[ServiciosTable.nombre]
+                            precioServicio = s[ServiciosTable.precio]
+                            duracionServicio = s[ServiciosTable.duracion]
+                        }
+                    } else if (req.promocionId != null) {
+                        val p = PromocionesTable.selectAll().where { PromocionesTable.id eq req.promocionId }.singleOrNull()
+                        if (p != null) {
+                            nombreServicio = p[PromocionesTable.nombre]
+                            precioServicio = p[PromocionesTable.precioPromocional]
+                            duracionServicio = 60
+                        }
+                    }
+
+                    if (finalBarberoId == null) throw Exception("No se pudo identificar al barbero")
 
                     CitasTable.insert {
                         it[usuarioId] = userId
-                        it[barberoId] = req.barberoId
+                        it[barberoId] = finalBarberoId!!
                         it[serviceName] = nombreServicio
-                        it[date] = req.fecha
-                        it[startTime] = req.horaInicio
+                        it[date] = req.fecha ?: java.time.LocalDate.now().toString()
+                        it[startTime] = req.horaInicio ?: "10:00"
                         it[duracion] = duracionServicio
                         it[totalPrice] = precioServicio
                         it[status] = "Programada"
-                        it[metodoPago] = "Pendiente" // Se define al pagar
+                        it[metodoPago] = "Efectivo" // Por defecto como pediste
                     }
                 }
                 call.respond(AdminActionResponse(true, "Cita agendada correctamente"))
             } catch (e: Exception) {
                 e.printStackTrace()
-                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error: ${e.message}"))
+                call.respond(HttpStatusCode.OK, AdminActionResponse(false, "Error al agendar: ${e.message}"))
             }
         }
     }
